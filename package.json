@@ -1,0 +1,39 @@
+{
+  "name": "cortico-world-livingmemory",
+  "version": "0.1.0-dev.9",
+  "type": "module",
+  "description": "给 Coopanion 桌面宠物接入 AstrBot 的 LivingMemory 长期记忆：桌宠与 QQ 智能体共用一套记忆库与知识图谱。需要配合 AstrBot 侧 astrbot_plugin_livingmemory_bridge 使用。",
+  "author": "HirannU",
+  "license": "MIT",
+  "keywords": [
+    "cortico-world",
+    "livingmemory",
+    "memory",
+    "companion",
+    "astrbot"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "node --check src/index.ts"
+  },
+  "cortico": {
+    "kind": "world",
+    "api": 6,
+    "displayName": "LivingMemory 桌宠直连",
+    "describe": "describe.json"
+  },
+  "files": [
+    "src",
+    "describe.json",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}

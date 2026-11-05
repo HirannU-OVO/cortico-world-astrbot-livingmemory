@@ -1,0 +1,66 @@
+{
+  "tools": [
+    {
+      "name": "mem_search",
+      "description": "检索 LivingMemory 长期记忆库与知识图谱。支持多路混合语义召回、实体关系关联以及对话事实匹配。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "检索关键词或查询问题"
+          },
+          "limit": {
+            "type": "number",
+            "description": "返回条数，默认 5 条"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "语义与图谱长期记忆检索",
+        "en": "Search long-term semantic and graph memories."
+      }
+    },
+    {
+      "name": "mem_record",
+      "description": "向 LivingMemory 显式沉淀并记录重要事实、偏好、事件或人际关系。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "要记录的记忆事实、重要事件或设定内容"
+          },
+          "importance": {
+            "type": "number",
+            "description": "重要性程度，0.0 至 1.0 之间，默认 0.6"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "存入显式长期记忆",
+        "en": "Record a new long-term memory fact."
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "key": "worlds.livingmemory.envPrompt",
+      "title": "LivingMemory · 环境提示词",
+      "role": "envPrompt",
+      "content": "你带有一套长期记忆：由本机 LivingMemory 维护的记忆库与知识图谱（人物、话题、事实三类节点，人物与话题之间有关系边）。\n\n## 检索\n- 想回忆以前的事、对方提过的偏好或约定、某个人的相关信息 → 用 `mem_search`，`query` 写具体话题（如「表情包发语音的规矩」「备份方案」）。\n- 不要用「以前的事」「你还记得吗」这类空泛说法去搜，命中率很低。\n- 检索不到就直说想不起来，**不要编造回忆**。检索到的内容是事实依据；与当前对话冲突时以最新说法为准。\n\n## 记录\n- 值得长期记住的：对方明确的要求、约定、偏好、重要经历、关系进展、长期有效的设定。\n- 不值得记的：寒暄、附和、调试过程、工具报错、临时状态、纯情绪表达。\n- 一次对话只记少数几条，抓关键，不要逐句存档。\n- 记的时候给 1~3 个 `topics`（2~6 字短语），同类内容用同一个词（如都写「表情包规范」），这样以后能被一起检索到。\n- 对方说「记住这个」「以后别这样」时，务必用 `mem_record` 存下来。\n\n## 称谓\n- 记忆用第三人称陈述，写清「谁对谁做了什么」。\n- 用对话里实际出现的称呼（名字或昵称），不要写「用户」「AI」「助手」「bot」「某人」这类泛称，也不要用「我」「你」这类代词。\n- 没有明确称呼时，用双方约定的叫法；实在没有，就用「对方」并保持前后一致。\n\n## 表达\n- 记忆是你自己的事，不要向对方转述「我调用了记忆工具」或报工具名，自然地表现出「我记得」就好。\n"
+    }
+  ]
+}
