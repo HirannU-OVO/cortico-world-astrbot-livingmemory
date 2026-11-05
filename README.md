@@ -1,108 +1,114 @@
 # cortico-world-astrbot-livingmemory
 
-给 [Coopanion](https://github.com/Pal-AI-Lab/Cortico) 桌面宠物接入 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的 **LivingMemory** 长期记忆。
+> **Cortico World 扩展**：为 [Coopanion](https://github.com/Pal-AI-Lab/Coopanion) 桌面宠物接入 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的 [LivingMemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory) 长期记忆与知识图谱系统。
 
-桌宠和 QQ 智能体共用同一套记忆库与知识图谱——QQ 上聊过的事，桌宠记得；桌宠这儿说过的约定，QQ 那边也知道。
+桌宠和 QQ 智能体共用同一套记忆库与知识图谱——QQ 上聊过的事桌宠记得，桌宠这儿说过的约定 QQ 那边也知道。
 
-> **适用范围**：本扩展**只能运行在 Coopanion** 上（依赖 Cortico World API 的宿主接口）。记忆的存取通过本机 HTTP 桥完成，桥的接口协议是通用的，但配套的 AstrBot 侧桥接插件是 AstrBot 专用实现。
+> ⚠️ **配套说明**：
+> - 本扩展**运行在 Coopanion 桌面宠物**侧；
+> - AstrBot 端必须成对安装配套桥接插件：[`astrbot_plugin_coopanion_livingmemory`](https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory)；
+> - 两者通过本地 HTTP 协议对接，**必须成对安装运行**。
 
 ---
 
-## 它怎么工作
+## 架构与分工
 
 ```
-Coopanion（桌宠）
-  │  本扩展：mem_search / mem_record + 对话流捕获
+Coopanion（桌面宠物）
+  │  本扩展：向模型暴露 mem_search / mem_record + 对话流自动捕获
   ▼
-cortico-world-astrbot-livingmemory（本包，TypeScript）
+cortico-world-astrbot-livingmemory（本扩展，TypeScript）
   │  本地 HTTP（默认 127.0.0.1:6198）
   ▼
-astrbot_plugin_livingmemory_bridge（AstrBot 侧，Python）   ← 必须同时安装
-  │  直接调用插件内部 API
+astrbot_plugin_coopanion_livingmemory（AstrBot 端桥接插件，Python）
+  │  直接调用 LivingMemory 内部引擎与反思服务
   ▼
 astrbot_plugin_livingmemory（记忆库 + 知识图谱 + 会话蒸馏）
 ```
 
-**两个包要成对安装**：本扩展只负责「问」与「说」，记忆的存储、向量检索、图谱与总结都在 AstrBot 侧。
-
-这样分工的好处：桌宠侧不必再加载一份 Embedding 模型与向量库；QQ 与桌宠读写同一份记忆。
+成对安装的好处：桌宠端无需在本地重复加载一份 Embedding 向量模型与图数据库，实现两端真正无缝共享同一套长期记忆。
 
 ---
 
-## 安装
+## 配套插件
 
-### 1. AstrBot 侧
+本扩展必须与配套的 AstrBot 端桥接插件成对安装：
 
-1. 装好 `astrbot_plugin_livingmemory`（本扩展不包含它）
-2. 把配套的 `astrbot_plugin_livingmemory_cortico_bridge`（AstrBot 侧插件）放进 AstrBot 的 `data/plugins/`，重启
-3. 在桥的配置页填两项（**必须填对，否则桌宠查不到已有记忆**）：
+- **[astrbot_plugin_coopanion_livingmemory](https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory)**：运行在 AstrBot 侧的桥接插件，负责把请求转接给 `astrbot_plugin_livingmemory` 引擎。
 
-| 配置 | 填什么 | 例 |
-| :--- | :--- | :--- |
-| `default_session_id` | 你的会话 umo（AstrBot 的统一消息来源标识） | `persona名:FriendMessage:你的QQ号` |
-| `bot_identity` | 桌宠账号身份（`id` 用 QQ 号、`name` 用称呼） | `{"id":"10000","name":"小助手"}` |
-
-4. 可选：`user_display_names` 填对方称呼（`{"10001":"小明"}`），记忆里就会写名字而不是数字 ID
-
-### 2. 桌宠侧
-
-1. 在市场装本扩展，或在扩展目录执行 `corepack pnpm add cortico-world-astrbot-livingmemory`
-2. 打开世界面板 →「桥接连接」确认地址是 `http://127.0.0.1:6198`（桥换过端口才需要改）
-3. 桥开了 `auth_token` 的话，把同一个值填进「鉴权令牌」
-
-装完即可用：`sessionId` / `personaId` 留空时自动使用桥端的默认值，不用先搞懂 umo 格式。
+两者通过本地 HTTP 接口对接（默认 `127.0.0.1:6198`），接口协议一致、缺一不可。
 
 ---
 
-## 给模型的两个工具
+## 安装与快速上手
 
-| 工具 | 用途 |
+### 1. AstrBot 侧准备
+1. 确保已安装上游 [astrbot_plugin_livingmemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory)；
+2. 安装并启用配套桥接插件 [`astrbot_plugin_coopanion_livingmemory`](https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory)；
+3. 在桥插件配置页配置好 `default_session_id` 与 `bot_identity`。
+
+### 2. 桌宠侧安装
+将本扩展目录放置于桌宠本地扩展目录：
+```
+%COOPANION_DIR%/data/extensions/local/cortico-world-astrbot-livingmemory/
+```
+在 Coopanion 的扩展管理中启用本扩展。
+
+---
+
+## 工具列表
+
+本扩展向大语言模型注册了两个记忆交互工具：
+
+| 工具名 | 作用与机制 |
 | :--- | :--- |
-| `mem_search(query, limit)` | 检索长期记忆（语义向量 + BM25 + 知识图谱三路融合） |
-| `mem_record(content, importance, topics)` | 显式沉淀一条记忆；`topics` 是 1~3 个话题词，会参与图谱建边，以后更容易被一起检索到 |
+| `mem_search(query, limit?)` | 检索长期记忆（由底层 LivingMemory 执行语义向量 + BM25 + 知识图谱三路融合排序） |
+| `mem_record(content, importance?, topics?)` | 显式沉淀一条关键事实或偏好；`topics` 会参与图谱建边，提高后续关联检索精度 |
 
-环境提示词（`src/ENV_PROMPT.md`，可在面板里直接编辑）已写好使用纪律：什么时候该查、什么时候该记、不记寒暄与调试过程、称谓用具体名字而非「用户」。
-
----
-
-## 配置项
-
-在面板的「桥接连接 / 记忆身份 / 对话捕获」三组里改，或直接写 `config.json` 的 `worlds.livingmemory`。
-
-| 键 | 类型 | 默认 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `bridgeUrl` | string | `http://127.0.0.1:6198` | 桥的地址 |
-| `authToken` | string | 空 | 与桥的 `auth_token` 一致；桥留空则这里也留空 |
-| `timeoutMs` | number | `5000` | 单次请求超时（毫秒） |
-| `sessionId` | string | 空 | 留空用桥端默认；要分离记忆（如私聊与群各存一份）时填具体 umo |
-| `personaId` | string | 空 | 留空用桥端默认；AstrBot 未配人格时仅作分类标签 |
-| `autoCapture` | boolean | `true` | 是否把桌宠对话增量推给桥 |
-| `captureIntervalMs` | number | `30000` | 捕获周期（毫秒） |
-| `captureMinLength` | number | `6` | 短于这个字数不入库，避免「嗯」「哦」变噪声 |
-
-> 改完地址、令牌、会话或人格需要**重载扩展**才生效。
+环境提示词已内置记忆管理规范，指导模型在合适时机检索与沉淀重要事实，避免把琐碎寒暄写入长期库。
 
 ---
 
-## 常见问题
+## 配置参数速查
 
-**查不到以前的记忆**
-多半是 `sessionId` 与 AstrBot 侧不一致。桥按会话隔离记忆，两边的 umo 必须完全相同。
+在桌宠「World 配置 -> 长期记忆」面板中可直接调整，或修改 `config.json` 的 `worlds.livingmemory` 字段：
 
-**同一个人在图谱里变成两个节点**
-`bot_identity` 的 `id` 必须是 QQ 号、`name` 是称呼，其他叫法放进 `aliases`。把名字当 id 用会生成两个人物节点。
-
-**请求返回 401**
-桥配了 `auth_token`，本扩展的「鉴权令牌」没填或填错。
-
-**桌宠的对话没有变成记忆**
-记忆不是每句都存：桥按 `reflection_engine.summary_trigger_rounds`（默认 10 轮）触发一次总结，达标才产生新记忆。想立刻记下来，就让模型调 `mem_record`。
-
-**聊完很久才出现新记忆**
-这是设计如此——总结由 LLM 按轮次批量执行，避免把闲聊逐句灌进库。
+| 配置键 | 类型 | 默认值 | 说明 |
+| :--- | :---: | :--- | :--- |
+| `bridgeUrl` | string | `http://127.0.0.1:6198` | AstrBot 侧桥插件的监听地址 |
+| `authToken` | string | `""` | 可选安全令牌，需与桥端 `auth_token` 保持一致 |
+| `timeoutMs` | number | `5000` | HTTP 请求超时时间（毫秒） |
+| `sessionId` | string | `""` | 指定会话 umo（留空则默认继承桥端会话） |
+| `personaId` | string | `""` | 指定人格 ID（留空则默认继承桥端人格） |
+| `autoCapture` | boolean | `true` | 是否自动将桌宠对话流批量推送到桥端进行后台反思蒸馏 |
+| `captureIntervalMs` | number | `30000` | 对话流捕获推送周期（毫秒） |
+| `captureMinLength` | number | `6` | 过滤短于该字数的发言，避免噪声干扰记忆提炼 |
 
 ---
 
-## 许可
+## 常见排障
+
+1. **查不到已有记忆**：
+   - 检查 `sessionId` 配置是否为空或与 AstrBot 侧会话 umo 不一致。
+2. **请求报错 401**：
+   - 检查桥端是否开启了 `auth_token`，若开启需在桌宠侧「鉴权令牌」中填入相同值。
+3. **对话没有即时生成记忆**：
+   - 正常现象。记忆总结由后台按轮次批量蒸馏，重要事实应直接使用 `mem_record` 显式写入。
+
+---
+
+## 参考与致谢
+
+本项目为原创实现。下表列明所依赖/参考的项目、参考内容及其边界：
+
+| 项目 | 许可 | 关系与参考内容 |
+| :--- | :--- | :--- |
+| [astrbot_plugin_livingmemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory) | 见上游仓库 | 记忆库/图谱引擎：本扩展经桥间接调用其检索与写入能力，未复制其代码 |
+
+> **边界声明**：本仓库不包含任何第三方项目的源代码；与上游的交互均通过公开接口或本地 HTTP 协议完成。若权利人认为有不妥之处，欢迎提 issue 沟通处理。
+
+---
+
+## 许可证
 
 [MIT License](LICENSE) © 2026 HirannU
