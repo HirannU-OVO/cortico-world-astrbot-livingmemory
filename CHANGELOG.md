@@ -2,7 +2,7 @@
 
 本文件记录「LivingMemory 桌宠直连扩展 (cortico-world-astrbot-livingmemory)」的版本变化。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.1.0] - 2026-11-05
+## [0.1.1] - 2026-11-05
 
 > 首个正式版：桌宠侧接入 AstrBot 的 LivingMemory，与 QQ 端共用同一套记忆库与知识图谱。
 
