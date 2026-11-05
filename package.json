@@ -25,13 +25,19 @@
     "kind": "world",
     "api": 6,
     "displayName": "LivingMemory 桌宠直连",
-    "describe": "describe.json"
+    "describe": "describe.json",
+    "tags": [
+      "memory",
+      "astrbot",
+      "bridge"
+    ]
   },
   "files": [
     "src",
     "describe.json",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -39,10 +45,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory.git"
+    "url": "git+github.com/HirannU-OVO/cortico-world-astrbot-livingmemory.git"
   },
   "homepage": "https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory#readme",
   "bugs": {
     "url": "https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory/issues"
+  },
+  "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }
