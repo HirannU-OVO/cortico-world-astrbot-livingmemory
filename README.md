@@ -1,4 +1,4 @@
-# cortico-world-livingmemory
+# cortico-world-astrbot-livingmemory
 
 给 [Coopanion](https://github.com/Pal-AI-Lab/Cortico) 桌面宠物接入 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的 **LivingMemory** 长期记忆。
 
@@ -14,7 +14,7 @@
 Coopanion（桌宠）
   │  本扩展：mem_search / mem_record + 对话流捕获
   ▼
-cortico-world-livingmemory（本包，TypeScript）
+cortico-world-astrbot-livingmemory（本包，TypeScript）
   │  本地 HTTP（默认 127.0.0.1:6198）
   ▼
 astrbot_plugin_livingmemory_bridge（AstrBot 侧，Python）   ← 必须同时安装
@@ -34,7 +34,7 @@ astrbot_plugin_livingmemory（记忆库 + 知识图谱 + 会话蒸馏）
 ### 1. AstrBot 侧
 
 1. 装好 `astrbot_plugin_livingmemory`（本扩展不包含它）
-2. 把配套的 `astrbot_plugin_livingmemory_bridge`（AstrBot 侧插件）放进 AstrBot 的 `data/plugins/`，重启
+2. 把配套的 `astrbot_plugin_livingmemory_cortico_bridge`（AstrBot 侧插件）放进 AstrBot 的 `data/plugins/`，重启
 3. 在桥的配置页填两项（**必须填对，否则桌宠查不到已有记忆**）：
 
 | 配置 | 填什么 | 例 |
@@ -46,7 +46,7 @@ astrbot_plugin_livingmemory（记忆库 + 知识图谱 + 会话蒸馏）
 
 ### 2. 桌宠侧
 
-1. 在市场装本扩展，或在扩展目录执行 `corepack pnpm add cortico-world-livingmemory`
+1. 在市场装本扩展，或在扩展目录执行 `corepack pnpm add cortico-world-astrbot-livingmemory`
 2. 打开世界面板 →「桥接连接」确认地址是 `http://127.0.0.1:6198`（桥换过端口才需要改）
 3. 桥开了 `auth_token` 的话，把同一个值填进「鉴权令牌」
 
