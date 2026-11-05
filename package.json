@@ -36,5 +36,13 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory.git"
+  },
+  "homepage": "https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory#readme",
+  "bugs": {
+    "url": "https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory/issues"
   }
 }
