@@ -30,11 +30,15 @@ astrbot_plugin_livingmemory（记忆库 + 知识图谱 + 会话蒸馏）
 
 ## 相关项目
 
-| 项目 | 位置 | 作用 |
-| :--- | :--- | :--- |
-| [Cortico 桥](https://github.com/as124da1231/astrbot_plugin_cortico_bridge) | AstrBot 插件 | 管「对话」：让 Cortico/桌宠人格直接在 QQ 里说话，AstrBot 只当手脚和账号 |
-| [cortico-world-astrbot](https://github.com/as124da1231/cortico-world-astrbot) | 桌宠扩展 | 和上一行成对，把桌宠人格接到 QQ |
-| [桥接插件](https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory) + [本扩展](https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory) | AstrBot 插件 + 本仓库 | 管「记忆」：把桌宠和 QQ 的记忆并到同一套 LivingMemory |
+| 项目 | 作者 | 位置 | 作用 |
+| :--- | :--- | :--- | :--- |
+| [Cortico 桥](https://github.com/as124da1231/astrbot_plugin_cortico_bridge) | [@as124da1231](https://github.com/as124da1231) | AstrBot 插件 | 管「对话」：让 Cortico/桌宠人格直接在 QQ 里说话，AstrBot 只当手脚和账号 |
+| [cortico-world-astrbot](https://github.com/as124da1231/cortico-world-astrbot) | [@as124da1231](https://github.com/as124da1231) | 桌宠扩展 | 和上一行成对，把桌宠人格接到 QQ |
+| [桥接插件](https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory) + [本扩展](https://github.com/HirannU-OVO/cortico-world-astrbot-livingmemory) | [@HirannU-OVO](https://github.com/HirannU-OVO) | AstrBot 插件 + 本仓库 | 管「记忆」：把桌宠和 QQ 的记忆并到同一套 LivingMemory |
+| [cortico-world-qq-stickers](https://github.com/HirannU-OVO/cortico-world-qq-stickers) | [@HirannU-OVO](https://github.com/HirannU-OVO) | 桌宠扩展 | QQ 表情包库：按情绪检索、掷骰配图，收到的表情自动归档 |
+| [cortico-world-qq-initiative](https://github.com/HirannU-OVO/cortico-world-qq-initiative) | [@HirannU-OVO](https://github.com/HirannU-OVO) | 桌宠扩展 | QQ 主动搭话：按配额、冷却和白名单让桌宠先开口 |
+
+> 前两项是 [@as124da1231](https://github.com/as124da1231) 的作品，谢谢他把桌宠接进 QQ 这条路先走了出来。后面三个是 [@HirannU-OVO](https://github.com/HirannU-OVO) 维护的 QQ 系列，和它们功能不重叠，可以一起装，配着用正好。
 
 上面两项是一对，负责「对话」；本扩展和配套的桥接插件是另一对，负责「记忆」。两者功能不重叠，**可以同时装**：装了 Cortico 桥，QQ 那头的回答由桌宠人格来出，记忆照样走本扩展。
 
@@ -48,7 +52,7 @@ astrbot_plugin_livingmemory（记忆库 + 知识图谱 + 会话蒸馏）
 
 先在 AstrBot 中安装并启用上游记忆插件：
 
-- [astrbot_plugin_livingmemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory)
+- [astrbot_plugin_livingmemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory) —— 感谢 **lxfight** 的开源作品：记忆库、知识图谱和会话蒸馏都是它做的，本仓库只是调用它的公开接口。
 
 装好后请按[上游 README](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory)确认嵌入模型和向量索引配置正确。配置不对时，最典型的现象是桌宠什么都记不住。
 
@@ -164,9 +168,9 @@ AstrBot 侧桥接插件开启了「校验 token」。在桌宠的「校验 token
 
 ## 依赖与参考
 
-| 上游项目 | 用途 | 许可 |
-| :--- | :--- | :--- |
-| [astrbot_plugin_livingmemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory) | 记忆库、知识图谱与会话蒸馏引擎；本扩展通过桥接插件调用其检索和写入能力 | 见上游仓库 |
+| 上游项目 | 作者 | 用途 | 许可 |
+| :--- | :--- | :--- | :--- |
+| [astrbot_plugin_livingmemory](https://github.com/lxfight-s-Astrbot-Plugins/astrbot_plugin_livingmemory) | lxfight | 记忆库、知识图谱与会话蒸馏引擎；本扩展通过桥接插件调用其检索和写入能力 | 见上游仓库 |
 
 ## 许可证
 
