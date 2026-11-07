@@ -51,7 +51,17 @@ export class LivingMemoryClient {
     }
   }
 
-  async health(): Promise<{ ok: boolean; livingmemory_connected: boolean; stats?: any }> {
+  async health(): Promise<{
+    ok: boolean;
+    livingmemory_connected: boolean;
+    plugin?: string;
+    usage_mode?: string;
+    memory_share_mode?: string;
+    default_session_id?: string;
+    default_persona_id?: string;
+    pet_persona_id?: string;
+    stats?: any;
+  }> {
     return this.request('/api/health', { method: 'GET' });
   }
 
@@ -64,7 +74,6 @@ export class LivingMemoryClient {
           query,
           limit,
           ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
-          ...(this.config.personaId ? { persona_id: this.config.personaId } : {}),
         }),
       },
     );
@@ -85,7 +94,6 @@ export class LivingMemoryClient {
           content,
           importance,
           ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
-          ...(this.config.personaId ? { persona_id: this.config.personaId } : {}),
           metadata: {
             source: 'coopanion_pet',
             ...metadata,

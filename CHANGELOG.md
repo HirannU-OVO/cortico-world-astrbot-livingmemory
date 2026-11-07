@@ -2,6 +2,25 @@
 
 本文件记录「LivingMemory 桌宠直连扩展 (cortico-world-astrbot-livingmemory)」的版本变化。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2026-11-07
+
+> 与 AstrBot 桥接插件 0.2.0 配套：新增记忆状态自检，配置项与文档口径同步。
+
+### 新增
+
+- **记忆状态自检**：新增 `mem_status` 工具，用一句话查看桥接是否正常、上游记忆库是否连上、当前接入 QQ 还是纯桌宠、记忆共享模式和默认会话 / 人格。
+
+### 变更
+
+- **人格不再由桌宠侧重复指定**：移除「记忆存给哪个人格」，统一在 AstrBot 侧的桥接插件设置；已有配置里的原值保留，但不再读取。
+- **会话设置移入高级区**：「记忆存到哪个会话」放到高级项末尾，平时留空跟随 AstrBot。
+
+### 优化
+
+- 面板配置项改用普通用户能看懂的标题和说明；「记忆存到哪个会话」注明当前平台类型。
+- 文档统一整理：安装、配置速查、相关项目和常见问题重写，和桥接侧「QQ + 桌宠本地」口径一致；示例账号使用占位符。
+- 版本号与桥接插件对齐到 `0.2.0`。
+
 ## [0.1.1] - 2026-11-05
 
 > 首个正式版：桌宠侧接入 AstrBot 的 LivingMemory，与 QQ 端共用同一套记忆库与知识图谱。
@@ -11,7 +30,7 @@
 - **记忆工具**：`mem_search`（混合向量 / BM25 / 图谱召回）与 `mem_record`（沉淀关键事实，支持 `topics` 参与建边）。
 - **环境提示词**：`src/ENV_PROMPT.md` 规定何时检索（具体话题而非「以前的事」）、何时记录（明确要求 / 约定 / 偏好，不记寒暄）、`topics` 怎么给、称谓纪律；通过 `webUi().promptDocs` 在面板直接编辑。
 - **对话流捕获**：按周期从宿主事件流增量提取对话轮次并推送到桥端，统一纳入 LivingMemory 的反思蒸馏（`captureIntervalMs` / `captureMinLength` / `autoCapture` 可配）。
-- **鉴权**：`authToken` 与桥端 `auth_token` 同值，请求自动带 `Authorization: Bearer`。
+- **鉴权**：`authToken` 与桥端 `auth_token` 同值，请求自动带鉴权请求头。
 
 ### 修复
 

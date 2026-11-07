@@ -169,6 +169,42 @@ export class LivingMemoryWorld implements World {
           }
         },
       },
+
+      {
+        name: 'mem_status',
+        description:
+          '自检记忆桥接是否正常：顺带查看上游记忆库有没有连上、当前是接入 QQ 还是纯桌宠。用户问「记忆通不通」「桥连上没有」时调用它，不需要命令行。',
+        parameters: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {},
+        },
+        tags: ['read'],
+        handler: async () => {
+          try {
+            const health = await this.client.health();
+            const usage =
+              health.usage_mode === 'local'
+                ? '纯桌宠'
+                : health.usage_mode === 'qq'
+                  ? '接入 QQ'
+                  : String(health.usage_mode || '未填');
+            const lines = [
+              '【LivingMemory 桥接状态】',
+              '桥接：正常',
+              `上游记忆库：${health.livingmemory_connected ? '已连接' : '未连接（先确认上游插件已安装并启用）'}`,
+              `使用场景：${usage}`,
+              `记忆共享模式：${health.memory_share_mode === 'pet_only' ? '桌宠单独记' : '一起记'}`,
+              `默认会话：${health.default_session_id || '未填'}`,
+              `默认人格：${health.default_persona_id || '未识别'}`,
+              `桌宠人格：${health.pet_persona_id || '未识别'}`,
+            ];
+            return lines.join('\n');
+          } catch (e: any) {
+            return `⚠ 桥接自检失败：${e?.message ?? e}（检查桥地址、校验 token，以及 AstrBot 侧插件是否在运行）`;
+          }
+        },
+      },
     ];
   }
 
