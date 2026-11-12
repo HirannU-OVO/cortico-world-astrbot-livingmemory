@@ -13,9 +13,27 @@ export interface LivingMemoryConfig {
   authToken: string;
   timeoutMs: number;
   sessionId: string;
+  /** 桥端按人格隔离检索时使用的人格 ID；留空则跟随桥端默认人格 */
+  personaId: string;
   autoCapture: boolean;
   captureIntervalMs: number;
   captureMinLength: number;
+  /** 实时召回：开着就每轮用户消息都检索注入 */
+  autoRecall: boolean;
+  /** 单轮实时召回的检索上限（条数） */
+  recallTopK: number;
+  /** 会话开场单独带一批长期记忆：每次会话建立都重新带，不与实时召回共用去重账 */
+  sessionSeedRecall: boolean;
+  /** 会话开场那批的检索上限（条数） */
+  sessionSeedTopK: number;
+  /** 实时批的记忆文本总长上限（字符） */
+  recallMaxChars: number;
+  /** 去重窗口容量：投过多少条后旧的滑出；调小可让记忆更频繁地重新命中 */
+  recallWindowCapacity: number;
+  /** 去重窗口容量下限：不小于单轮条数即可，避免同轮条目把自己挤掉 */
+  recallWindowFloor: number;
+  /** 开场批的记忆文本总长上限（字符），与实时批分开算 */
+  sessionSeedMaxChars: number;
 }
 
 export const LIVINGMEMORY_DEFAULTS: LivingMemoryConfig = {
@@ -25,10 +43,24 @@ export const LIVINGMEMORY_DEFAULTS: LivingMemoryConfig = {
   timeoutMs: 5000,
   // 留空 = 用桥端配置的默认会话，普通用户装完即可用，不必先知道 umo 格式
   sessionId: '',
+  // 留空 = 用桥端默认人格，普通用户不用填
+  personaId: '',
   autoCapture: true,
   captureIntervalMs: 30000,
   // 2 会把「嗯」「哦」这类附和也推进去，产生大量噪声记忆
   captureMinLength: 6,
+  // 实时召回：每轮都带相关记忆，重复由指纹去重挡住
+  autoRecall: true,
+  recallTopK: 3,
+  // 会话开场那批单独算：每次会话建立都重新带一次，不走永久去重
+  sessionSeedRecall: true,
+  sessionSeedTopK: 20,
+  // 单批上限：实时批按这档压，开场批另按 sessionSeedMaxChars
+  recallMaxChars: 350,
+  sessionSeedMaxChars: 400,
+  // 调试用：窗口越小，同一段记忆越早滑出、越容易被重新命中
+  recallWindowCapacity: 8,
+  recallWindowFloor: 5,
 };
 
 /**
@@ -135,36 +167,96 @@ export function buildStatusConfigGroup(
  */
 export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
   {
-    id: 'livingmemory-basic',
+    id: 'livingmemory-recall',
     owner: 'world:livingmemory',
     schema: {
       type: 'object',
-      title: '连接',
-      description: '桌宠通过本机服务读写 AstrBot 的记忆库。默认值通常不用改；改完需重载扩展。',
+      title: '记忆带出',
+      description: '日常最常调的就是这两组：开场带一批当背景，之后每轮再补相关的。',
       properties: {
-        'worlds.livingmemory.bridgeUrl': {
-          type: 'string',
-          title: 'AstrBot 的地址',
-          description: '填 AstrBot 那边显示的服务地址；没改过端口就不用动',
+        'worlds.livingmemory.sessionSeedRecall': {
+          type: 'boolean',
+          title: '会话开场带一批长期记忆',
+          description:
+            '每开一次会话，先带出一批宽口径的旧事当背景。这批不受实时召回的去重影响，每次会话都会重新带。',
           'x-hot': false,
         },
-        'worlds.livingmemory.authToken': {
-          type: 'string',
-          title: '校验 token',
-          description: '和 AstrBot 插件 astrbot_plugin_coopanion_livingmemory 的「校验 token」填同一串。留空表示不校验——端口暴露在公网时不要留空。',
-          'x-warning': true,
+        'worlds.livingmemory.sessionSeedTopK': {
+          type: 'integer',
+          title: '开场带几条',
+          description: '开场那批最多带出多少条，仍受「开场每批最多多少字」约束；上限与桥端一致为 20。',
+          minimum: 1,
+          maximum: 20,
+          'x-suffix': '条',
+          'x-hot': false,
+        },
+        'worlds.livingmemory.autoRecall': {
+          type: 'boolean',
+          title: '实时带出相关记忆',
+          description:
+            '开启后每轮对话都检索相关旧事。同一段内容只投一次，不会重复堆叠。' +
+            '关掉只影响实时召回，不影响上面的开场批次。',
+          'x-hot': false,
+        },
+        'worlds.livingmemory.recallTopK': {
+          type: 'integer',
+          title: '实时每次几条',
+          description: '每轮最多带出多少条相关记忆。条数越多越可能想起细节，但也更占上下文。',
+          minimum: 1,
+          maximum: 20,
+          'x-suffix': '条',
+          'x-hot': false,
+        },
+        'worlds.livingmemory.recallMaxChars': {
+          type: 'integer',
+          title: '实时每批最多多少字',
+          description: '实时召回这一批的文字总长上限，单独计算，与开场批互不影响。',
+          minimum: 100,
+          maximum: 4000,
+          'x-suffix': '字',
+          'x-hot': false,
+        },
+        'worlds.livingmemory.recallWindowCapacity': {
+          type: 'integer',
+          title: '去重窗口多大',
+          description:
+            '投过多少条记忆后最早的开始滑出。数值越小，同一段记忆越容易被重新带出；' +
+            '数值越大，越不容易重复。改动立即生效，不用重载扩展。',
+          minimum: 1,
+          maximum: 100,
+          'x-suffix': '条',
+          'x-hot': true,
+        },
+        'worlds.livingmemory.recallWindowFloor': {
+          type: 'integer',
+          title: '去重窗口下限',
+          description:
+            '窗口至少这么大，防止同一轮投的条目把自己挤出去。一般不小于「实时每次几条」。' +
+            '改动立即生效，不用重载扩展。',
+          minimum: 1,
+          maximum: 100,
+          'x-suffix': '条',
+          'x-hot': true,
+        },
+        'worlds.livingmemory.sessionSeedMaxChars': {
+          type: 'integer',
+          title: '开场每批最多多少字',
+          description: '会话开场那批的文字总长上限，单独计算，与实时批互不影响。',
+          minimum: 100,
+          maximum: 4000,
+          'x-suffix': '字',
           'x-hot': false,
         },
       },
     },
   },
   {
-    id: 'livingmemory-advanced',
+    id: 'livingmemory-capture',
     owner: 'world:livingmemory',
     schema: {
       type: 'object',
-      title: '高级',
-      description: '默认值即可正常使用；改完需重载扩展。',
+      title: '记忆收集',
+      description: '决定桌宠的聊天怎么进记忆库。',
       properties: {
         'worlds.livingmemory.autoCapture': {
           type: 'boolean',
@@ -181,9 +273,35 @@ export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
           'x-suffix': '字',
           'x-hot': false,
         },
+      },
+    },
+  },
+  {
+    id: 'livingmemory-advanced',
+    owner: 'world:livingmemory',
+    schema: {
+      type: 'object',
+      title: '高级（改完需重载扩展）',
+      description: '连接地址、同步频率、超时、会话归属；平时不用动。',
+      properties: {
+        'worlds.livingmemory.bridgeUrl': {
+          type: 'string',
+          title: '（高级）AstrBot 的地址',
+          description: '填 AstrBot 那边显示的服务地址；没改过端口就不用动',
+          'x-hot': false,
+        },
+        'worlds.livingmemory.authToken': {
+          type: 'string',
+          title: '（高级）校验 token',
+          description:
+            '和 AstrBot 插件 astrbot_plugin_coopanion_livingmemory 的「校验 token」填同一串。' +
+            '留空表示不校验——端口暴露在公网时不要留空。',
+          'x-warning': true,
+          'x-hot': false,
+        },
         'worlds.livingmemory.captureIntervalMs': {
           type: 'integer',
-          title: '多久同步一次',
+          title: '（高级）多久同步一次',
           description: '每隔这么多毫秒把新对话送一次',
           minimum: 10000,
           maximum: 600000,
@@ -192,7 +310,7 @@ export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
         },
         'worlds.livingmemory.timeoutMs': {
           type: 'integer',
-          title: '等待超时',
+          title: '（高级）等待超时',
           description: 'AstrBot 回得慢时调大；单位是毫秒',
           minimum: 1000,
           maximum: 60000,
@@ -201,8 +319,14 @@ export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
         },
         'worlds.livingmemory.sessionId': {
           type: 'string',
-          title: '记忆存到哪个会话',
+          title: '（高级）记忆存到哪个会话',
           description: '桌宠的对话存进哪个会话；留空就跟着 AstrBot 那边，平时不用填',
+          'x-hot': false,
+        },
+        'worlds.livingmemory.personaId': {
+          type: 'string',
+          title: '（高级）按哪个人格检索',
+          description: '桥端按人格隔离记忆时用；留空就跟随桥端默认人格，平时不用填',
           'x-hot': false,
         },
       },

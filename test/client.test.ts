@@ -3,9 +3,10 @@ import { LIVINGMEMORY_DEFAULTS } from '../src/config.ts';
 
 async function run() {
   console.log('Testing LivingMemoryClient & Manifest...');
+  // 真实 token 不入库：本地联调时通过环境变量注入
   const cfg = {
     ...LIVINGMEMORY_DEFAULTS,
-    authToken: 'bbe91c944251051417aa8d704334d87f',
+    authToken: process.env.LIVINGMEMORY_TOKEN ?? '',
   };
   const client = new LivingMemoryClient(cfg);
 

@@ -107,6 +107,10 @@ export interface ManifestResponse {
 
 export class LivingMemoryClient {
   private readonly config: LivingMemoryConfig;
+  /** 桥端不支持 persona_id 时置真，后续请求不再带该字段 */
+  private personaUnsupported = false;
+  /** 降级告警一次，避免每轮刷日志 */
+  private personaWarned = false;
 
   constructor(config: LivingMemoryConfig) {
     this.config = config;
@@ -158,24 +162,52 @@ export class LivingMemoryClient {
     return this.request<ManifestResponse>('/api/tools/manifest', { method: 'GET' });
   }
 
-  async search(query: string, limit = 5): Promise<MemorySearchResult[]> {
-    const data = await this.request<{ ok: boolean; count: number; memories: MemorySearchResult[]; error?: string }>(
-      '/api/memory/search',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          query,
-          limit,
-          ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
-        }),
-      },
-    );
+  async search(
+    query: string,
+    limit = 5,
+    personaId = '',
+  ): Promise<MemorySearchResult[]> {
+    const build = (withPersona: boolean) =>
+      JSON.stringify({
+        query,
+        limit,
+        ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
+        // 桥端按人格隔离检索；不透传时运行时 personaId 不生效
+        ...(withPersona && personaId && !this.personaUnsupported
+          ? { persona_id: personaId }
+          : {}),
+      });
 
-    if (!data.ok) {
-      throw new Error(data.error || '检索记忆失败');
+    const call = async (withPersona: boolean) => {
+      const data = await this.request<{
+        ok: boolean;
+        count: number;
+        memories: MemorySearchResult[];
+        error?: string;
+      }>('/api/memory/search', { method: 'POST', body: build(withPersona) });
+      if (!data.ok) throw new Error(data.error || '检索记忆失败');
+      return data.memories || [];
+    };
+
+    try {
+      return await call(true);
+    } catch (err) {
+      // 老版本桥的 mem_search 不接受 persona_id（contract 为
+      // additionalProperties:false，会直接 422）。这里按字段名识别并
+      // 去掉该参数重试一次，保证桌宠升级、桥没升级时仍能检索。
+      const field = (err as { field?: string })?.field;
+      if (personaId && field === 'persona_id') {
+        this.personaUnsupported = true;
+        if (!this.personaWarned) {
+          this.personaWarned = true;
+          console.warn(
+            '[LivingMemory] 桥端版本不支持 persona_id，已自动降级为不传该参数（检索功能不受影响）',
+          );
+        }
+        return await call(false);
+      }
+      throw err;
     }
-
-    return data.memories || [];
   }
 
   async add(content: string, importance = 0.6, topics?: string[]): Promise<number> {

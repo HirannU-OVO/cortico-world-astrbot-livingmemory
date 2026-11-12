@@ -8,6 +8,7 @@ const {
 } = await import('../src/config.ts');
 
 const { LivingMemoryWorld } = await import('../src/index.ts');
+const { EXTENSION_VERSION } = await import('../src/version.ts');
 
 console.log('=== 1. Test buildStatusConfigGroup: Initial State ===');
 const initialGroup = buildStatusConfigGroup(null, null, 'http://127.0.0.1:6198', true);
@@ -53,7 +54,7 @@ const healthyData = {
 const healthyGroup = buildStatusConfigGroup(healthyData);
 assert.match(healthyGroup.schema.title, /🟢 桥接正常/);
 assert.match(healthyGroup.schema.description, /版本标识/);
-assert.match(healthyGroup.schema.description, /桌宠插件: v0\.2\.1(?![-.\d])/);
+assert.match(healthyGroup.schema.description, new RegExp(`桌宠插件: v${EXTENSION_VERSION.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![-.\\d])`));
 assert.match(healthyGroup.schema.description, /接入 QQ 模式/);
 assert.match(healthyGroup.schema.description, /一起记/);
 assert.match(healthyGroup.schema.description, /记忆引擎 ✓/);
@@ -111,12 +112,13 @@ const ui = world.webUi('zh');
 assert(Array.isArray(ui.lamps), 'ui.lamps must be an array');
 assert.equal(ui.lamps[0].label, '记忆桥接');
 assert(Array.isArray(ui.badges), 'ui.badges must be an array');
-assert(ui.badges.some(b => b.label === '版本' && b.value === 'v0.2.1'), 'Must contain version badge');
+assert(ui.badges.some(b => b.label === '版本' && b.value === `v${EXTENSION_VERSION}`), 'Must contain version badge');
 assert(Array.isArray(ui.config), 'ui.config must be an array');
-assert.equal(ui.config.length, 3, 'Must have status + basic + advanced config groups');
+assert.equal(ui.config.length, 4, 'Must have status + recall + capture + advanced config groups');
 assert.equal(ui.config[0].id, 'livingmemory-status', 'Index 0 MUST be livingmemory-status');
-assert.equal(ui.config[1].id, 'livingmemory-basic', 'Index 1 MUST be livingmemory-basic');
-assert.equal(ui.config[2].id, 'livingmemory-advanced', 'Index 2 MUST be livingmemory-advanced');
+assert.equal(ui.config[1].id, 'livingmemory-recall', 'Index 1 MUST be livingmemory-recall');
+assert.equal(ui.config[2].id, 'livingmemory-capture', 'Index 2 MUST be livingmemory-capture');
+assert.equal(ui.config[3].id, 'livingmemory-advanced', 'Index 3 MUST be livingmemory-advanced');
 
 console.log('Lamps:', ui.lamps);
 console.log('Badges:', ui.badges);

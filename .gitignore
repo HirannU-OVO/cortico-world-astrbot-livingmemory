@@ -12,3 +12,6 @@ config.json
 .vscode/
 .idea/
 .bak/
+
+# 本地方案文档不进公开库
+docs/

@@ -62,6 +62,183 @@
       }
     },
     {
+      "name": "mem_memorize",
+      "description": "结构化沉淀深度长期记忆。当用户明确要求记住某事，或出现长期偏好、约定、关键事实时使用。经过记忆引擎深度处理器分析。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "简明清晰的长期记忆陈述或事实，供记忆引擎深度处理器分析"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "可选：标签主题词列表，最多 5 个",
+            "default": []
+          },
+          "key_facts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "可选：支撑该记忆的关键事实点，最多 5 个",
+            "default": []
+          },
+          "sentiment": {
+            "type": "string",
+            "description": "情感倾向：positive（积极）、neutral（中性）或 negative（消极）",
+            "enum": [
+              "positive",
+              "neutral",
+              "negative"
+            ],
+            "default": "neutral"
+          },
+          "importance": {
+            "type": "number",
+            "description": "重要性程度，0.0 至 1.0 之间，默认 0.7",
+            "default": 0.7,
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "reason": {
+            "type": "string",
+            "description": "可选：需要记住这条信息的简要理由",
+            "default": ""
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "深度结构化沉淀记忆",
+        "en": "Deep structured memory consolidation."
+      }
+    },
+    {
+      "name": "mem_recall",
+      "description": "精准召回长期记忆。当当前上下文不足或需要回忆历史偏好、约定时，使用简练专注的关键词检索。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "简练专注的回忆关键词"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最大召回条数，默认 5",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 20
+          },
+          "include_source": {
+            "type": "boolean",
+            "description": "是否返回保留的原文消息证据，默认 false",
+            "default": false
+          },
+          "target": {
+            "type": "string",
+            "description": "召回目标范围：conversation（会话整体）或 current_speaker（当前说话人）",
+            "enum": [
+              "conversation",
+              "current_speaker"
+            ],
+            "default": "conversation"
+          },
+          "start_time": {
+            "type": "number",
+            "description": "可选：检索时间范围起始时间戳"
+          },
+          "end_time": {
+            "type": "number",
+            "description": "可选：检索时间范围结束时间戳"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "精准召回历史记忆",
+        "en": "Precise recall of past memories."
+      }
+    },
+    {
+      "name": "mem_evidence",
+      "description": "按记忆编号 (memory_id) 深读记忆证据与有效事实。支持 cursor 分页续读。仅在 Beta 回忆特性开启时可用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "memory_id": {
+            "type": "integer",
+            "description": "由 recall/search 返回的记忆整型 ID"
+          },
+          "include_source": {
+            "type": "boolean",
+            "description": "是否返回保留的原文消息证据，默认 false",
+            "default": false
+          },
+          "cursor": {
+            "type": "string",
+            "description": "分页续读游标，传入上一页的 next_cursor",
+            "default": ""
+          }
+        },
+        "required": [
+          "memory_id"
+        ]
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "深读记忆事实与原文证据",
+        "en": "Read structured facts and source evidence."
+      }
+    },
+    {
+      "name": "mem_forget",
+      "description": "归档并软删除过时、错误或敏感的长期记忆。仅限管理员权限，且仅支持软删除（归档），数据库中仍可由管理员恢复。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "memory_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "要软删除/归档的记忆整型 ID 列表，不可猜测 ID"
+          },
+          "reason": {
+            "type": "string",
+            "description": "归档该记忆的审计原因",
+            "default": ""
+          }
+        },
+        "required": [
+          "memory_ids"
+        ]
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "归档软删除记忆",
+        "en": "Archive and soft-delete memories."
+      }
+    },
+    {
       "name": "mem_status",
       "description": "检查与测试当前 LivingMemory 桥接服务的连通状态、会话与人格配置。在排查记忆同步或测试连通性时调用。",
       "parameters": {
@@ -82,7 +259,7 @@
       "key": "worlds.livingmemory.envPrompt",
       "title": "LivingMemory · 环境提示词",
       "role": "envPrompt",
-      "content": "你带有一套长期记忆：由本机 LivingMemory 维护的记忆库与知识图谱（人物、话题、事实三类节点，人物与话题之间有关系边）。\n\n## 检索\n- 想回忆以前的事、对方提过的偏好或约定、某个人的相关信息 → 用 `mem_search`，`query` 写具体话题（如「表情包发语音的规矩」「备份方案」）。\n- 不要用「以前的事」「你还记得吗」这类空泛说法去搜，命中率很低。\n- 检索不到就直说想不起来，**不要编造回忆**。检索到的内容是事实依据；与当前对话冲突时以最新说法为准。\n\n## 记录\n- 值得长期记住的：对方明确的要求、约定、偏好、重要经历、关系进展、长期有效的设定。\n- 不值得记的：寒暄、附和、调试过程、工具报错、临时状态、纯情绪表达。\n- 一次对话只记少数几条，抓关键，不要逐句存档。\n- 记的时候给 1~3 个 `topics`（2~6 字短语），同类内容用同一个词（如都写「表情包规范」），这样以后能被一起检索到。\n- 对方说「记住这个」「以后别这样」时，务必用 `mem_record` 存下来。\n\n## 称谓\n- 记忆用第三人称陈述，写清「谁对谁做了什么」。\n- 用对话里实际出现的称呼（名字或昵称），不要写「用户」「AI」「助手」「bot」「某人」这类泛称，也不要用「我」「你」这类代词。\n- 没有明确称呼时，用双方约定的叫法；实在没有，就用「对方」并保持前后一致。\n\n## 表达\n- 记忆是你自己的事，不要向对方转述「我调用了记忆工具」或报工具名，自然地表现出「我记得」就好。\n"
+      "content": "你带有一套长期记忆：由本机 LivingMemory 维护的记忆库与知识图谱（人物、话题、事实三类节点，人物与话题之间有关系边）。\n\n## 自动带出的记忆\n\n每轮对话前，系统会自动检索与你当前话题相关的旧事，附在这条消息的事件帧里。\n它和下面这些工具查到的内容是同一份记忆库，区别只是「自动送到你眼前」和「你主动去查」。\n\n- 自动带出的内容**当背景用**，相关就自然接上，不相关就忽略。\n- **不要向对方复述「我检索到」「记忆里说」「根据记忆」**，就当自己本来记得。\n- 每条记忆前面方括号里是**发生时间**，标「以前」的是超过一周的旧事；\n  时效以对方当前说法为准，不要拿旧状态当现在。\n- 自动带出的只是**候选**：内容不够或需要核对细节时，用 `mem_recall` 再深查。\n\n## 检索工具\n- `mem_search`：综合语义检索与知识图谱关联。想回忆以前的事、某个人的综合背景或全局话题（如「钓鱼」「工作」「重要偏好」）时使用，`query` 写具体话题词。\n- `mem_recall`：专注精准召回。当当前上下文不足或需要精准核对历史约定、细节偏好时使用，输入简练专注的关键词；亦可使用 `target=\"current_speaker\"` 召回当前说话人的历史偏好。\n- `mem_evidence`：深读证据。如果从检索结果中拿到了 `id` (即 memory_id)，且需要查看其结构化有效事实或原始消息全文证据，使用 `mem_evidence` 深入读取，支持续读游标。\n- 检索不到就直说想不起来，**不要编造回忆**。检索到的内容是事实依据；与当前对话冲突时以最新说法为准。\n\n## 记录与沉淀\n两条写入通道严格区分，不可混淆：\n- `mem_record`（快速轻量直写）：\n  - 当提到日常设定、一般偏好、重要事件时快速沉淀。\n  - 传入 `content` 并提供 1~5 个主题词 `topics`（如「钓鱼」「生日」），会自动进行图谱建边。\n- `mem_memorize`（深度结构化沉淀）：\n  - 对方明确说「记住这个」「千万别忘了」「以后要记住」，或出现长期有效的重要承诺、身份事实、核心规矩时使用。\n  - 该工具会通过记忆引擎深度处理器进行结构化分析，提炼 key_facts 与情感倾向。\n- `mem_forget`：\n  - 仅限管理员要求遗忘、删除错误或过时的特定记忆时使用，执行安全的软删除（可归档恢复）。普通对话中不得随意调用。\n- `mem_status`：\n  - 检查记忆库连接状态、桥接连通性与可用工具集。用户询问「记忆通不通」「桥连上没有」时调用。\n\n## 记录纪律\n- 值得长期记住的：对方明确的要求、约定、偏好、重要经历、关系进展、长期有效的设定。\n- 不值得记的：寒暄、附和、调试过程、工具报错、临时状态、纯情绪表达。\n- 一次对话只记少数几条，抓关键，不要逐句存档。\n\n## 称谓规范\n- 记忆用第三人称陈述，写清「谁对谁做了什么」。\n- 用对话里实际出现的称呼（名字或昵称），不要写「用户」「AI」「助手」「bot」「某人」这类泛称，也不要用「我」「你」这类代词。\n- 没有明确称呼时，用双方约定的叫法；实在没有，就用「对方」并保持前后一致。\n\n## 表达自然\n- 记忆是你自己的思考过程，不要向对方转述「我调用了记忆工具」或报工具名，自然地表现出「我记得」即可。\n"
     }
   ]
 }
