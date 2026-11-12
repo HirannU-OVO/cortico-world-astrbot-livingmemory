@@ -40,6 +40,13 @@
           "importance": {
             "type": "number",
             "description": "重要性程度，0.0 至 1.0 之间，默认 0.6"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "可选的话题分类标签，1~4 个短词（如「摄影」「早起」）。会在 LivingMemory 知识图谱中建边，方便以后按话题聚合自动调取。"
           }
         },
         "required": [
@@ -52,6 +59,21 @@
       "summary": {
         "zh": "存入显式长期记忆",
         "en": "Record a new long-term memory fact."
+      }
+    },
+    {
+      "name": "mem_status",
+      "description": "检查与测试当前 LivingMemory 桥接服务的连通状态、会话与人格配置。在排查记忆同步或测试连通性时调用。",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "诊断记忆桥接连通状态",
+        "en": "Diagnose LivingMemory bridge status."
       }
     }
   ],
