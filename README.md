@@ -110,7 +110,7 @@ git clone https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory.g
 
 | 工具 | 作用 |
 | :--- | :--- |
-| `mem_search(query, limit?)` | 检索长期记忆；支持语义、关键词和知识图谱混合排序，默认返回 5 条 |
+| `mem_search(query \| queries[], limit?)` | 检索长期记忆；支持语义、关键词和知识图谱混合排序，默认返回 5 条。`queries` 可给最多 4 段关键词，多段时按 RRF 融合，只给一段时与单段等价 |
 | `mem_record(content, importance?, topics?)` | 主动记下重要事实或偏好；`topics` 会帮助以后按话题检索到这条记忆 |
 | `mem_memorize(content, topics?, key_facts?, sentiment?, importance?, reason?)` | 深度结构化沉淀；提炼关键事实与情感倾向，适合长期有效的身份事实与重要承诺 |
 | `mem_recall(query, limit?, include_source?, target?, start_time?, end_time?)` | 精准召回；核对历史约定与细节偏好，可按说话人或时间范围检索 |

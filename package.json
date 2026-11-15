@@ -1,6 +1,6 @@
 {
   "name": "cortico-world-astrbot-livingmemory",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "给 Coopanion 桌面宠物接入 AstrBot 的 LivingMemory 长期记忆：桌宠与 QQ 智能体共用一套记忆库与知识图谱。需要配合 AstrBot 侧 astrbot_plugin_coopanion_livingmemory 使用。",
   "author": "HirannU",
@@ -19,8 +19,11 @@
   "main": "./src/index.ts",
   "scripts": {
     "check": "node --check src/index.ts && node --check src/config.ts && node --check src/client.ts && node test/verify_status_display.mjs && node --experimental-strip-types test/world.test.ts",
-    "test": "node test/verify_status_display.mjs && node --experimental-strip-types test/world.test.ts && node --experimental-strip-types test/persona_passthrough.test.mjs && node --experimental-strip-types test/render_deadline.test.mjs && node --experimental-strip-types test/bridge_compat.test.mjs",
-    "acr": "node scripts/verify_ac_r.mjs"
+    "test": "node test/verify_status_display.mjs && node --experimental-strip-types test/world.test.ts && node --experimental-strip-types test/persona_passthrough.test.mjs && node --experimental-strip-types test/render_deadline.test.mjs && node --experimental-strip-types test/bridge_compat.test.mjs && node --experimental-strip-types test/multi_query.test.mjs",
+    "acr": "node scripts/verify_ac_r.mjs",
+    "build:webui": "node scripts/build-webui.mjs",
+    "build": "npm run build:webui",
+    "build:webui:css": "node -e \"require('fs').mkdirSync('dist',{recursive:true});require('fs').copyFileSync('src/webui/style.css','dist/webui.css')\""
   },
   "cortico": {
     "kind": "world",
@@ -42,7 +45,9 @@
         "displayName": "LivingMemory Bridge",
         "description": "Share long-term memory graph between Coopanion desktop pet and AstrBot agent."
       }
-    }
+    },
+    "webUiClient": "dist/webui.js",
+    "webUiStyle": "dist/webui.css"
   },
   "files": [
     "src",

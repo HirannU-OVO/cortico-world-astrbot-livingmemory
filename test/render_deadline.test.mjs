@@ -1,5 +1,5 @@
 /**
- * AC-11b：render 必须在 3 秒内返回或超时返回 null，且不抛错。
+ * render 必须在 3 秒内返回或超时返回 null，且不抛错。
  * 与「同批率」分开验收，互不替代。
  */
 import assert from 'node:assert/strict';
@@ -45,7 +45,7 @@ function makeWorld(searchImpl) {
 // 3) 快速返回 → 正常产出
 {
   const world = makeWorld(async () => [
-    { id: 1, content: '羽羽喜欢看海', metadata: { create_time: Date.now() / 1000 } },
+    { id: 1, content: '小林喜欢看海', metadata: { create_time: Date.now() / 1000 } },
   ]);
   const out = await world.renderLiveRecall(3, ['看海']);
   assert.ok(out && typeof out.text === 'string', '应返回文本');
@@ -53,4 +53,4 @@ function makeWorld(searchImpl) {
   console.log('✓ 正常用例：返回文本');
 }
 
-console.log('✓ AC-11b render 3 秒自兜底：全部通过');
+console.log('✓ render 3 秒自兜底：全部通过');

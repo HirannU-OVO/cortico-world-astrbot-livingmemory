@@ -162,14 +162,34 @@ export class LivingMemoryClient {
     return this.request<ManifestResponse>('/api/tools/manifest', { method: 'GET' });
   }
 
+  /**
+   * 检索记忆。
+   *
+   * @param query     单段查询；未传 queries 时走这条（行为与旧版一致）
+   * @param limit     返回条数
+   * @param personaId 人格过滤，空则不传
+   * @param queries   可选多段查询。≥2 段时才带上 queries 字段，桥端按 RRF 融合；
+   *                  单段时仍走 query 路径，避免桥端落到「有 queries 但只 1 段」的分支
+   */
   async search(
     query: string,
     limit = 5,
     personaId = '',
+    queries?: string[],
   ): Promise<MemorySearchResult[]> {
+    const segments = (queries || [])
+      .map((q) => String(q ?? '').trim())
+      .filter((q) => q.length > 0)
+      .slice(0, 4);
+    const useMulti = segments.length >= 2;
+    // query 始终要有值：桥端在 segments 只有 1 段时会回退到 query 路径，
+    // 此时若 query 为空就会查到空结果，所以用首段兜底。
+    const primary = query || segments[0] || '';
+
     const build = (withPersona: boolean) =>
       JSON.stringify({
-        query,
+        query: primary,
+        ...(useMulti ? { queries: segments } : {}),
         limit,
         ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
         // 桥端按人格隔离检索；不透传时运行时 personaId 不生效

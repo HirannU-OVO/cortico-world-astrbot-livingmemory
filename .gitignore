@@ -1,5 +1,7 @@
 node_modules/
-dist/
+dist/*
+!dist/webui.js
+!dist/webui.css
 *.log
 .DS_Store
 Thumbs.db
@@ -13,5 +15,5 @@ config.json
 .idea/
 .bak/
 
-# 本地方案文档不进公开库
+# 本地笔记不进公开库
 docs/

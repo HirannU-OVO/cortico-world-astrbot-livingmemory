@@ -10,9 +10,14 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/**/*"
+  ],
+  "exclude": [
+    "src/webui/**/*"
   ]
 }

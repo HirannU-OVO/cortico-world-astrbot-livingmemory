@@ -1,5 +1,5 @@
 /**
- * E-07 用例：证明运行时 personaId 真的进入桥接检索请求体。
+ * 用例：证明运行时 personaId 真的进入桥接检索请求体。
  * 拦截 fetch，断言 POST /api/memory/search 的 body 含 persona_id。
  */
 import assert from 'node:assert/strict';
@@ -37,4 +37,4 @@ captured.length = 0;
 await client.search('第二问');
 assert.equal(captured[0].body.persona_id, undefined, '未传时不得带空 persona_id');
 
-console.log('✓ E-07 persona_id 透传用例通过：显式传入 1 条，未传时省略');
+console.log('✓ persona_id 透传用例通过：显式传入 1 条，未传时省略');

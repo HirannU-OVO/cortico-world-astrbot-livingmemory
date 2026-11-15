@@ -1,6 +1,6 @@
 /**
  * index.ts - LivingMemory 桌宠极速直连扩展主入口
- * 支持从 Bridge /api/tools/manifest 动态生成全部 mem_* 工具 (B-01 ~ B-05)
+ * 支持从 Bridge /api/tools/manifest 动态生成全部 mem_* 工具
  */
 
 import type { EventEnvelope, ToolDef, World, WorldHost, WorldLamp, WorldWebUiDecl } from 'cortico/core/types.ts';
@@ -12,7 +12,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import {
-  buildStatusConfigGroup,
+  buildStatusGroups,
   LIVINGMEMORY_CONFIG_GROUPS,
   LIVINGMEMORY_DEFAULTS,
   type LivingMemoryConfig,
@@ -41,6 +41,18 @@ const USER_MESSAGE_TYPES = new Set([
  * 近期已投过的记忆正文（LRU）。
  * 容量必须不小于单轮条数，否则同一轮注入的条目会把自己挤出窗口，去重当场失效。
  */
+/**
+ * 把 mem_search 的入参整理成一句可读的「关键词」标签。
+ * queries 有值就拼多段（用 + 连接），否则用单段 query；都为空返回空串。
+ */
+function describeQueryLabel(args: Record<string, any>): string {
+  const segs = Array.isArray(args?.queries)
+    ? (args.queries as unknown[]).map((q) => String(q ?? '').trim()).filter((q) => q.length > 0)
+    : [];
+  if (segs.length) return segs.slice(0, 4).join(' + ');
+  return String(args?.query ?? '').trim();
+}
+
 class RecentRecallWindow {
   private capacity: number;
   private readonly order: string[] = [];
@@ -139,7 +151,7 @@ export class LivingMemoryWorld implements World {
   private host: WorldHost | null = null;
   private client: LivingMemoryClient;
   private captureTimer: ReturnType<typeof setInterval> | null = null;
-  /** 独立的召回轮询：与自动收集解耦（AC-12） */
+  /** 独立的召回轮询：与自动收集解耦 */
   private recallTimer: ReturnType<typeof setInterval> | null = null;
   /** 召回轮询自己的游标 */
   private lastRecallTickCursor = 0;
@@ -174,7 +186,7 @@ export class LivingMemoryWorld implements World {
   private probeCount = 0;
   private isProbing = false;
 
-  /** 动态工具集合与清单状态 (B-01 ~ B-05) */
+  /** 动态工具集合与清单状态 */
   private activeTools: ToolDef[] = [];
   private manifestRevision = '';
   private manifestCatalog: ManifestToolDef[] = [];
@@ -215,7 +227,7 @@ export class LivingMemoryWorld implements World {
   }
 
   /**
-   * 从 Bridge /api/tools/manifest 同步动态工具面 (B-01 ~ B-05)
+   * 从 Bridge /api/tools/manifest 同步动态工具面
    */
   async syncManifestTools(): Promise<void> {
     if (this.syncManifestPromise) {
@@ -229,7 +241,7 @@ export class LivingMemoryWorld implements World {
           return;
         }
 
-        // 校验 schema 契约版本 (LM-E2E-17 / B-01)
+        // 校验 schema 契约版本
         if (manifest.schema_version !== 'coopanion.memory-bridge.v1') {
           this.lastError = `schema_mismatch: 桥端协议版本 (${manifest.schema_version}) 与桌宠不匹配`;
           this.host?.log?.warn?.(`[LivingMemory] ${this.lastError}`);
@@ -237,7 +249,7 @@ export class LivingMemoryWorld implements World {
           return;
         }
 
-        // 若 revision 产生变化则重建动态工具表 (B-04 热更新)
+        // 若 revision 产生变化则重建动态工具表（热更新）
         if (manifest.revision && manifest.revision !== this.manifestRevision) {
           this.manifestRevision = manifest.revision;
           this.manifestCatalog = manifest.catalog || [];
@@ -253,7 +265,7 @@ export class LivingMemoryWorld implements World {
               `[LivingMemory] 动态工具集已热更新 (rev: ${manifest.revision}, 可用工具数: ${dynamicTools.length}: ${dynamicTools.map((t) => t.name).join(', ')})`,
             );
           } else {
-            // 上游 pending 时保持最小工具集兜底 (B-05)
+            // 上游 pending 时保持最小工具集兜底
             this.activeTools = this.fallbackTools();
           }
         }
@@ -271,7 +283,7 @@ export class LivingMemoryWorld implements World {
   }
 
   /**
-   * 根据 ManifestToolDef 动态生成标准 ToolDef (B-02)
+   * 根据 ManifestToolDef 动态生成标准 ToolDef
    */
   private buildDynamicToolDef(tool: ManifestToolDef): ToolDef {
     return {
@@ -286,7 +298,7 @@ export class LivingMemoryWorld implements World {
   }
 
   /**
-   * 动态工具执行分发与回执结构化 (A-03 ~ A-07, B-02)
+   * 动态工具执行分发与回执结构化
    */
   private async handleDynamicTool(tool: ManifestToolDef, args: Record<string, any>): Promise<string> {
     try {
@@ -294,16 +306,22 @@ export class LivingMemoryWorld implements World {
 
       // 针对各工具进行人性化输出格式化
       if (tool.name === 'mem_search') {
-        const query = String(args.query || '').trim();
+        // 多段检索：queries 优先，缺省回落到单段 query；两者都没有才算空
+        const label = describeQueryLabel(args);
         const results = res.memories || res.results || [];
         if (!results.length) {
-          return `未检索到与「${query}」相关的长期记忆。`;
+          return label
+            ? `未检索到与「${label}」相关的长期记忆。`
+            : '未检索到相关的长期记忆。';
         }
         const lines = results.map((r: any, i: number) => {
           const scorePct = Math.round((r.score || 0) * 100);
           return `${i + 1}. [相关度 ${scorePct}%] ${r.content}`;
         });
-        return `【LivingMemory 记忆检索结果（关键词：${query}）】\n${lines.join('\n')}`;
+        const head = label
+          ? `【LivingMemory 记忆检索结果（关键词：${label}）】`
+          : '【LivingMemory 记忆检索结果】';
+        return `${head}\n${lines.join('\n')}`;
       }
 
       if (tool.name === 'mem_record') {
@@ -425,7 +443,7 @@ export class LivingMemoryWorld implements World {
   }
 
   /**
-   * 兜底最小工具三件套 (B-01 / B-05)
+   * 兜底最小工具三件套
    */
   private fallbackTools(): ToolDef[] {
     return [
@@ -437,20 +455,30 @@ export class LivingMemoryWorld implements World {
           additionalProperties: false,
           properties: {
             query: { type: 'string', description: '检索关键词或查询问题' },
+            queries: {
+              type: 'array',
+              description: '可选多段关键词，最多 4 段；给了 2 段以上时桥端按 RRF 融合多路结果',
+              items: { type: 'string' },
+              maxItems: 4,
+            },
             limit: { type: 'integer', description: '返回条数，默认 5 条' },
           },
-          required: ['query'],
+          required: [],
         },
         tags: ['read'],
         handler: async (args: Record<string, any>) => {
+          const segments = Array.isArray(args.queries)
+            ? (args.queries as unknown[]).map((q) => String(q ?? '').trim()).filter((q) => q.length > 0).slice(0, 4)
+            : [];
           const query = String(args.query || '').trim();
-          if (!query) return '⚠ 错误：query 不能为空。';
+          const label = describeQueryLabel(args);
+          if (!query && !segments.length) return '⚠ 错误：query 与 queries 至少提供一个。';
           const limit = Math.max(1, Math.min(20, Number(args.limit) || 5));
           try {
-            const results = await this.client.search(query, limit);
-            if (!results.length) return `未检索到与「${query}」相关的长期记忆。`;
+            const results = await this.client.search(query, limit, '', segments);
+            if (!results.length) return `未检索到与「${label}」相关的长期记忆。`;
             const lines = results.map((r, i) => `${i + 1}. [相关度 ${Math.round((r.score || 0) * 100)}%] ${r.content}`);
-            return `【LivingMemory 记忆检索结果（关键词：${query}）】\n${lines.join('\n')}`;
+            return `【LivingMemory 记忆检索结果（关键词：${label}）】\n${lines.join('\n')}`;
           } catch (e: any) {
             return `⚠ 记忆检索暂时不可用: ${e?.message ?? e}`;
           }
@@ -515,7 +543,7 @@ export class LivingMemoryWorld implements World {
     void this.probeHealth();
     await this.syncManifestTools();
 
-    // 启动定时健康巡检与工具面热重载（每 30 秒探测并比对 revision，B-04）
+    // 启动定时健康巡检与工具面热重载（每 30 秒探测并比对 revision）
     this.healthTimer = setInterval(() => {
       void this.probeHealth();
       void this.syncManifestTools();
@@ -549,7 +577,7 @@ export class LivingMemoryWorld implements World {
       });
     }
 
-    // AC-12：召回与写入解耦。关掉自动收集时，实时召回仍要独立轮询。
+    // 召回与写入解耦：关掉自动收集时，实时召回仍要独立轮询。
     const recallOn =
       this.liveCfg('sessionSeedRecall', true) !== false ||
       !(this.cfg.autoRecall === false || String(this.cfg.autoRecall ?? '').trim().toLowerCase() === 'off');
@@ -622,9 +650,7 @@ export class LivingMemoryWorld implements World {
       },
     ];
 
-    const badges: Array<{ label: string; value: string | number; tone?: 'on' | 'off' | 'plain' }> = [
-      { label: '版本', value: `v${EXTENSION_VERSION}`, tone: 'plain' },
-    ];
+    const badges: Array<{ label: string; value: string | number; tone?: 'on' | 'off' | 'plain' }> = [];
     if (connected) {
       badges.push({ label: '桥接', value: '正常', tone: 'on' });
       badges.push({
@@ -641,6 +667,8 @@ export class LivingMemoryWorld implements World {
     return {
       lamps,
       badges,
+      panels: [{ id: 'bridge', title: '桥接状态', getMethods: ['status'] }],
+      invoke: (panel: string, method: string, args: unknown[]) => this.invokePanel(panel, method, args),
       promptDocs: [
         {
           key: 'worlds.livingmemory.envPrompt',
@@ -651,15 +679,54 @@ export class LivingMemoryWorld implements World {
           vars: [],
         },
       ],
-      config: [
-        buildStatusConfigGroup(this.lastHealth, this.lastError, this.cfg.bridgeUrl, this.probeCount === 0),
-        ...LIVINGMEMORY_CONFIG_GROUPS,
-      ],
+      // 桥接状态改由独立「桥接状态」页承载，配置页只留配置项
+      config: [...LIVINGMEMORY_CONFIG_GROUPS],
+    };
+  }
+
+  /** 桥接状态页的数据源：把 lastHealth 整理成前端可直接渲染的形状。 */
+  private invokePanel(_panel: string, method: string, _args: unknown[]): unknown {
+    if (method !== 'status') {
+      throw new Error(`未知的面板方法: ${method}`);
+    }
+    const h = this.lastHealth;
+    const caps = h?.upstream_capabilities || {};
+    const capKeys = Object.keys(caps);
+    const capabilities = capKeys.map((k) => ({
+      label: caps[k].label || k,
+      enabled: !!caps[k].enabled,
+    }));
+
+    const warnings: Array<{ kind: string; text: string }> = [];
+    if (h?.upstream_capability_warning) warnings.push({ kind: '能力', text: h.upstream_capability_warning });
+    if (h?.identity_warning) warnings.push({ kind: '身份', text: h.identity_warning });
+    if (h?.persona_warning) warnings.push({ kind: '人格', text: h.persona_warning });
+
+    return {
+      ok: !!h?.ok,
+      probing: this.probeCount === 0 && this.isProbing,
+      error: this.lastError || '',
+      bridgeUrl: this.cfg.bridgeUrl,
+      bridgeVersion: h?.version ? `v${h.version}` : '',
+      upstreamVersion: h?.upstream_version ? `v${h.upstream_version}` : '',
+      upstreamConnected: !!h?.livingmemory_connected,
+      usageMode: h?.usage_mode || '',
+      usageLabel: h?.usage_mode === 'local' ? '纯桌宠模式' : '接入 QQ 模式',
+      shareMode: h?.memory_share_mode || '',
+      shareLabel: h?.memory_share_mode === 'pet_only' ? '桌宠单独记' : '一起记',
+      sessionId: h?.default_session_id || '',
+      defaultPersona: h?.default_persona_id || '',
+      petPersona: h?.pet_persona_id || '',
+      capabilities,
+      capsTotal: capabilities.length,
+      capsDisabled: capabilities.filter((c) => !c.enabled).length,
+      warnings,
+      toolsCount: this.activeTools.length,
     };
   }
 
   /**
-   * 暴露给桌宠主脑的工具集（从 manifest 动态加载，B-02）
+   * 暴露给宿主的工具集（从 manifest 动态加载）
    */
   tools(): ToolDef[] {
     return this.activeTools.length > 0 ? this.activeTools : this.fallbackTools();
@@ -704,7 +771,7 @@ export class LivingMemoryWorld implements World {
     try {
       const dir = dirname(this.recallStatePath);
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-      // AC-22：临时文件 + rename 原子替换，避免中断留下半写 JSON
+      // 临时文件 + rename 原子替换，避免中断留下半写 JSON
       const payload = JSON.stringify(
         {
           version: 3,
@@ -779,7 +846,7 @@ export class LivingMemoryWorld implements World {
   }
 
   /**
-   * E-08 老配置迁移：把历史默认值归一到当前口径。
+   * 老配置迁移：把历史默认值归一到当前口径。
    * 只在命中旧默认值时改，用户显式设过别的值不动。
    */
   private normalizeRecallConfig(): void {
@@ -935,7 +1002,7 @@ export class LivingMemoryWorld implements World {
     const wantSeed = this.liveCfg('sessionSeedRecall', true) !== false && !this.sessionSeedDone;
     if (!wantLive && !wantSeed) return;
 
-    // AC-18：只把 2 小时内的上一轮拼进 query，避免把几天前的旧话硬接上
+    // 只把 2 小时内的上一轮拼进 query，避免把几天前的旧话硬接上
     const maxAgeMs = 2 * 60 * 60 * 1000;
     const nowMs = Date.now();
     const userTexts = turns

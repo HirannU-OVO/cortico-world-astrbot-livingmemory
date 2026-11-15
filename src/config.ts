@@ -4,7 +4,6 @@
 
 import type { ConfigGroup } from 'cortico/core/types.ts';
 import type { LivingMemoryHealth } from './client.ts';
-import { EXTENSION_VERSION } from './version.ts';
 
 export interface LivingMemoryConfig {
   enabled: boolean;
@@ -67,17 +66,17 @@ export const LIVINGMEMORY_DEFAULTS: LivingMemoryConfig = {
  * 生成配置栏顶部的状态卡片组（置于配置列表 index 0）
  * 包含：桥接状态、上游记忆库就绪情况、运行场景模式、上游各项能力状态与绑定信息
  */
-export function buildStatusConfigGroup(
+export function buildStatusGroups(
   health: LivingMemoryHealth | null,
   error?: string | null,
   bridgeUrl?: string,
   isInitial?: boolean,
-): ConfigGroup {
+): ConfigGroup[] {
   const targetUrl = bridgeUrl || LIVINGMEMORY_DEFAULTS.bridgeUrl;
 
   if (!health) {
     if (isInitial) {
-      return {
+      return [{
         id: 'livingmemory-status',
         owner: 'world:livingmemory',
         schema: {
@@ -86,24 +85,62 @@ export function buildStatusConfigGroup(
           description: `正在探测 AstrBot 记忆桥接服务 (${targetUrl})，请稍候...`,
           properties: {},
         },
-      };
+      }];
     }
-    return {
-      id: 'livingmemory-status',
-      owner: 'world:livingmemory',
-      schema: {
-        type: 'object',
-        title: '🔴 桥接服务未连接',
-        description:
-          `未连接到 AstrBot 记忆桥接服务 (${targetUrl})。\n` +
-          '【排查建议】\n' +
-          '1. 请确认 AstrBot 正在运行，且已在插件管理中启用 astrbot_plugin_coopanion_livingmemory 插件；\n' +
-          '2. 请确认下方「AstrBot 的地址」端口与 AstrBot 侧配置一致（默认 6198）；\n' +
-          '3. 若 AstrBot 侧设置了「校验 token」，请确保下方 token 与之完全匹配。' +
-          (error ? `\n（错误详情: ${error}）` : ''),
-        properties: {},
+    return [
+      {
+        id: 'livingmemory-status',
+        owner: 'world:livingmemory',
+        schema: {
+          type: 'object',
+          title: '🔴 桥接服务未连接',
+          description: `未能连接到 AstrBot 记忆桥接服务（${targetUrl}）。`,
+          properties: {},
+        },
       },
-    };
+      {
+        id: 'livingmemory-hint-1',
+        owner: 'world:livingmemory',
+        schema: {
+          type: 'object',
+          title: '排查 ①　AstrBot 是否在跑',
+          description: '确认 AstrBot 正在运行，且已启用 astrbot_plugin_coopanion_livingmemory 插件。',
+          properties: {},
+        },
+      },
+      {
+        id: 'livingmemory-hint-2',
+        owner: 'world:livingmemory',
+        schema: {
+          type: 'object',
+          title: '排查 ②　端口是否一致',
+          description: `下方「AstrBot 的地址」端口需与 AstrBot 侧配置一致，当前指向 ${targetUrl}。`,
+          properties: {},
+        },
+      },
+      {
+        id: 'livingmemory-hint-3',
+        owner: 'world:livingmemory',
+        schema: {
+          type: 'object',
+          title: '排查 ③　校验 token 是否匹配',
+          description: '若 AstrBot 侧设置了「校验 token」，下方 token 必须与之完全一致。',
+          properties: {},
+        },
+      },
+      ...(error
+        ? [{
+            id: 'livingmemory-hint-err',
+            owner: 'world:livingmemory',
+            schema: {
+              type: 'object',
+              title: '错误详情',
+              description: String(error),
+              properties: {},
+            },
+          }]
+        : []),
+    ];
   }
 
   const lmConnected = health.livingmemory_connected;
@@ -125,41 +162,92 @@ export function buildStatusConfigGroup(
   const shareLabel = health.memory_share_mode === 'pet_only' ? '桌宠单独记（记忆库隔离）' : '一起记（共用知识图谱与记忆库）';
   const upstreamVer = health.upstream_version ? `v${health.upstream_version}` : '已连接';
 
-  const capList = capKeys
-    .map((k) => {
-      const c = caps[k];
-      return c.enabled ? `${c.label} ✓` : `${c.label} ✗`;
-    })
-    .join('  ·  ');
+  // 能力清单按每行三项折行，避免七项连成一条长串
+  const capItems = capKeys.map((k) => {
+    const c = caps[k];
+    return c.enabled ? `${c.label} ✓` : `${c.label} ✗`;
+  });
+  const capRows: string[] = [];
+  for (let i = 0; i < capItems.length; i += 3) {
+    capRows.push(`  ${capItems.slice(i, i + 3).join('　')}`);
+  }
 
-  const lines: string[] = [
-    `【版本标识】桌宠插件: v${EXTENSION_VERSION}  |  桥接服务: ${health.version ? `v${health.version}` : '已连通'}  |  上游记忆库: ${upstreamVer}`,
-    `【服务与记忆库】桥接连接正常  |  上游 LivingMemory: ${lmConnected ? `已连接 (${upstreamVer})` : '未连接 ⚠️'}`,
-    `【运行模式】${usageLabel}  |  记忆共享: ${shareLabel}`,
-    capList ? `【各项能力】${capList}` : '',
-    `【绑定上下文】会话: ${health.default_session_id || '默认会话'}  |  默认人格: ${health.default_persona_id || '未指定'}  |  桌宠人格: ${health.pet_persona_id || '跟随'}`,
-  ].filter(Boolean);
+  const upstreamState = lmConnected ? `已连接 ${upstreamVer}` : '未连接 ⚠️';
+  const capsSummary = capKeys.length
+    ? (allCapsOk ? `${capKeys.length} 项全部就绪` : `${disabledCaps.length} 项降级`)
+    : '无能力数据';
+
+  const groups: ConfigGroup[] = [
+    {
+      id: 'livingmemory-status',
+      owner: 'world:livingmemory',
+      schema: {
+        type: 'object',
+        title,
+        description: `桥接服务已连通，上游记忆库${upstreamState}。`,
+        properties: {},
+      },
+    },
+    {
+      id: 'livingmemory-runtime',
+      owner: 'world:livingmemory',
+      schema: {
+        type: 'object',
+        title: '运行模式',
+        description: `${usageLabel}；记忆共享：${shareLabel}。`,
+        properties: {},
+      },
+    },
+    {
+      id: 'livingmemory-caps',
+      owner: 'world:livingmemory',
+      schema: {
+        type: 'object',
+        title: `上游能力 · ${capsSummary}`,
+        description: allCapsOk
+          ? '所有上游能力均可正常调用。'
+          : disabledCaps.map((k) => `${caps[k].label} 不可用`).join('；') + '。',
+        properties: {},
+      },
+    },
+    {
+      id: 'livingmemory-binding',
+      owner: 'world:livingmemory',
+      schema: {
+        type: 'object',
+        title: '绑定上下文',
+        description:
+          `会话 ${health.default_session_id || '默认会话'}；` +
+          `默认人格 ${health.default_persona_id || '未指定'}；` +
+          `桌宠人格 ${health.pet_persona_id || '跟随'}。`,
+        properties: {},
+      },
+    },
+  ];
 
   if (health.upstream_capability_warning) {
-    lines.push(`⚠️ 能力提示: ${health.upstream_capability_warning}`);
+    groups.push({
+      id: 'livingmemory-warn-cap',
+      owner: 'world:livingmemory',
+      schema: { type: 'object', title: '⚠️ 能力降级', description: health.upstream_capability_warning, properties: {} },
+    });
   }
   if (health.identity_warning) {
-    lines.push(`⚠️ 身份提示: ${health.identity_warning}`);
+    groups.push({
+      id: 'livingmemory-warn-id',
+      owner: 'world:livingmemory',
+      schema: { type: 'object', title: '⚠️ 身份提醒', description: health.identity_warning, properties: {} },
+    });
   }
   if (health.persona_warning) {
-    lines.push(`⚠️ 人格提示: ${health.persona_warning}`);
+    groups.push({
+      id: 'livingmemory-warn-persona',
+      owner: 'world:livingmemory',
+      schema: { type: 'object', title: '⚠️ 人格提醒', description: health.persona_warning, properties: {} },
+    });
   }
 
-  return {
-    id: 'livingmemory-status',
-    owner: 'world:livingmemory',
-    schema: {
-      type: 'object',
-      title,
-      description: lines.join('\n'),
-      properties: {},
-    },
-  };
+  return groups;
 }
 
 /**

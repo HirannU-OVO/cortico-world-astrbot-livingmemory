@@ -122,7 +122,7 @@ async function run() {
       return { ok: true, memory_id: 8888, topics: ['旅行', '海边'] };
     }
     if (name === 'mem_recall') {
-      return { ok: true, count: 1, results: [{ id: 8888, content: '羽羽喜欢看海' }] };
+      return { ok: true, count: 1, results: [{ id: 8888, content: '小林喜欢看海' }] };
     }
     return { ok: true };
   };
@@ -137,11 +137,11 @@ async function run() {
   const recallTool = dynamicTools.find((t) => t.name === 'mem_recall')!;
   const recallRes = await recallTool.handler({ query: '看海' });
   console.log('4. mem_recall 执行回执:', recallRes);
-  if (!recallRes.includes('羽羽喜欢看海')) {
+  if (!recallRes.includes('小林喜欢看海')) {
     throw new Error('mem_recall output formatting mismatch');
   }
 
-  // 4. 验证错误码人性化处理 (LM-E2E-18 ~ 20)
+  // 4. 验证错误码人性化处理
   client.callTool = async () => {
     const err: any = new Error('Field unknown');
     err.code = 'unknown_field';
@@ -155,7 +155,7 @@ async function run() {
     throw new Error('Unknown field error formatting mismatch');
   }
 
-  // 5. 验证热更新 (LM-E2E-06): 当 revision 变化，新增 mem_forget 时自动热更新
+  // 5. 验证热更新: 当 revision 变化，新增 mem_forget 时自动热更新
   mockManifest.revision = 'rev_test_002';
   mockManifest.tools.push({
     name: 'mem_forget',

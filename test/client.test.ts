@@ -44,8 +44,8 @@ async function run() {
   // 5. Memorize check (mem_memorize)
   if (toolNames.includes('mem_memorize')) {
     const memRes = await client.memorize({
-      content: '桌宠主脑架构已升级为契约驱动动态工具面',
-      topics: ['架构', '主脑'],
+      content: '桌宠架构已升级为契约驱动动态工具面',
+      topics: ['架构', '契约'],
       key_facts: ['契约版本为 v1'],
       sentiment: 'positive',
       importance: 0.9,

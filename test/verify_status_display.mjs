@@ -1,127 +1,125 @@
+/**
+ * 桥接状态页数据源与 WebUI 声明的断言。
+ * 状态已从配置页拆出，独立为 panels.bridge，由 invokePanel('bridge','status') 供数。
+ */
 import assert from 'node:assert/strict';
 
-// Import config and world
-const {
-  LIVINGMEMORY_CONFIG_GROUPS,
-  LIVINGMEMORY_DEFAULTS,
-  buildStatusConfigGroup
-} = await import('../src/config.ts');
-
 const { LivingMemoryWorld } = await import('../src/index.ts');
-const { EXTENSION_VERSION } = await import('../src/version.ts');
 
-console.log('=== 1. Test buildStatusConfigGroup: Initial State ===');
-const initialGroup = buildStatusConfigGroup(null, null, 'http://127.0.0.1:6198', true);
-assert.equal(initialGroup.id, 'livingmemory-status');
-assert.equal(initialGroup.owner, 'world:livingmemory');
-assert.match(initialGroup.schema.title, /检测中/);
-console.log('Initial title:', initialGroup.schema.title);
-console.log('Initial desc:', initialGroup.schema.description);
+function makeWorld(health, opts = {}) {
+  const world = new LivingMemoryWorld({
+    cfg: { enabled: true, bridgeUrl: 'http://127.0.0.1:6198', timeoutMs: 5000 },
+    timezone: 'Asia/Shanghai',
+  });
+  world.host = { log: { info() {}, warn() {}, debug() {}, error() {} }, store: { latestCursor: () => 0 } };
+  world.lastHealth = health;
+  world.lastError = opts.error || null;
+  world.probeCount = opts.probeCount ?? 1;
+  world.isProbing = !!opts.isProbing;
+  world.activeTools = opts.tools || [];
+  return world;
+}
 
-console.log('\n=== 2. Test buildStatusConfigGroup: Disconnected State ===');
-const disconnectedGroup = buildStatusConfigGroup(null, 'connect ECONNREFUSED 127.0.0.1:6198', 'http://127.0.0.1:6198', false);
-assert.equal(disconnectedGroup.id, 'livingmemory-status');
-assert.match(disconnectedGroup.schema.title, /🔴 桥接服务未连接/);
-assert.match(disconnectedGroup.schema.description, /排查建议/);
-assert.match(disconnectedGroup.schema.description, /ECONNREFUSED/);
-console.log('Disconnected title:', disconnectedGroup.schema.title);
-console.log('Disconnected desc:', disconnectedGroup.schema.description);
+// ---------- 1. 初始检测中 ----------
+{
+  const world = makeWorld(null, { probeCount: 0, isProbing: true });
+  const s = world.invokePanel('bridge', 'status');
+  assert.equal(s.ok, false);
+  assert.equal(s.probing, true);
+  assert.equal(s.bridgeUrl, 'http://127.0.0.1:6198');
+  console.log('✓ 1. 检测中状态');
+}
 
-console.log('\n=== 3. Test buildStatusConfigGroup: Connected & Fully Healthy ===');
-const healthyData = {
-  ok: true,
-  plugin: 'astrbot_plugin_coopanion_livingmemory',
-  version: '0.2.1',
-  upstream_version: '0.2.8',
-  upstream_capabilities: {
-    upstream_plugin: { label: '上游插件', enabled: true, reason: '' },
-    engine: { label: '记忆引擎', enabled: true, reason: '' },
-    conversation_api: { label: '对话管理', enabled: true, reason: '' },
-    reflection: { label: '记忆反思', enabled: true, reason: '' },
-    conversations_db: { label: '会话数据库', enabled: true, reason: '' },
-    livingmemory_db: { label: '记忆数据库', enabled: true, reason: '' },
-    persona_migration: { label: '人格迁移', enabled: true, reason: '' },
-  },
-  upstream_capability_warning: null,
-  livingmemory_connected: true,
-  usage_mode: 'qq',
-  memory_share_mode: 'shared',
-  default_session_id: 'group:987654321',
-  default_persona_id: 'default_persona',
-  pet_persona_id: 'coo_pet',
-};
+// ---------- 2. 未连接 ----------
+{
+  const world = makeWorld(null, { error: 'connect ECONNREFUSED 127.0.0.1:6198' });
+  const s = world.invokePanel('bridge', 'status');
+  assert.equal(s.ok, false);
+  assert.match(s.error, /ECONNREFUSED/);
+  console.log('✓ 2. 未连接状态带错误详情');
+}
 
-const healthyGroup = buildStatusConfigGroup(healthyData);
-assert.match(healthyGroup.schema.title, /🟢 桥接正常/);
-assert.match(healthyGroup.schema.description, /版本标识/);
-assert.match(healthyGroup.schema.description, new RegExp(`桌宠插件: v${EXTENSION_VERSION.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![-.\\d])`));
-assert.match(healthyGroup.schema.description, /接入 QQ 模式/);
-assert.match(healthyGroup.schema.description, /一起记/);
-assert.match(healthyGroup.schema.description, /记忆引擎 ✓/);
-assert.match(healthyGroup.schema.description, /group:987654321/);
-console.log('Healthy title:', healthyGroup.schema.title);
-console.log('Healthy desc:\n' + healthyGroup.schema.description);
+// ---------- 3. 完全正常 ----------
+{
+  const world = makeWorld({
+    ok: true, livingmemory_connected: true, version: '0.2.2', upstream_version: '2.13.0',
+    usage_mode: 'qq', memory_share_mode: 'shared',
+    default_session_id: 'group:987654321', default_persona_id: '大肥鱼', pet_persona_id: '小肥鱼',
+    upstream_capabilities: {
+      a: { label: '上游插件', enabled: true },
+      b: { label: '记忆引擎', enabled: true },
+      c: { label: '对话管理', enabled: true },
+    },
+  }, { tools: [1, 2, 3] });
+  const s = world.invokePanel('bridge', 'status');
+  assert.equal(s.ok, true);
+  assert.equal(s.upstreamConnected, true);
+  assert.equal(s.capsTotal, 3);
+  assert.equal(s.capsDisabled, 0);
+  assert.equal(s.toolsCount, 3);
+  assert.equal(s.sessionId, 'group:987654321');
+  assert.equal(s.warnings.length, 0);
+  console.log('✓ 3. 正常状态：能力 3/3、工具 3 个');
+}
 
-console.log('\n=== 4. Test buildStatusConfigGroup: Upstream Degraded ===');
-const degradedData = {
-  ...healthyData,
-  upstream_capabilities: {
-    ...healthyData.upstream_capabilities,
-    conversation_api: { label: '对话管理', enabled: false, reason: '上游重构弃用旧接口' },
-  },
-  upstream_capability_warning: '上游版本 0.2.8 对话管理接口不匹配，暂时降级',
-};
+// ---------- 4. 部分能力降级 ----------
+{
+  const world = makeWorld({
+    ok: true, livingmemory_connected: true, version: '0.2.2', upstream_version: '2.13.0',
+    usage_mode: 'local', memory_share_mode: 'pet_only',
+    upstream_capabilities: {
+      a: { label: '上游插件', enabled: true },
+      c: { label: '对话管理', enabled: false },
+    },
+    upstream_capability_warning: '上游版本不匹配，对话管理暂时降级',
+  });
+  const s = world.invokePanel('bridge', 'status');
+  assert.equal(s.capsDisabled, 1);
+  assert.equal(s.warnings.length, 1);
+  assert.equal(s.warnings[0].kind, '能力');
+  assert.equal(s.usageLabel, '纯桌宠模式');
+  assert.equal(s.shareLabel, '桌宠单独记');
+  console.log('✓ 4. 降级状态：1 项不可用 + 1 条警告');
+}
 
-const degradedGroup = buildStatusConfigGroup(degradedData);
-assert.match(degradedGroup.schema.title, /🟡 桥接正常 · 部分上游能力降级/);
-assert.match(degradedGroup.schema.description, /对话管理 ✗/);
-assert.match(degradedGroup.schema.description, /能力提示/);
-console.log('Degraded title:', degradedGroup.schema.title);
-console.log('Degraded desc:\n' + degradedGroup.schema.description);
+// ---------- 5. 未知方法应抛错 ----------
+{
+  const world = makeWorld(null);
+  assert.throws(() => world.invokePanel('bridge', 'nope'), /未知的面板方法/);
+  console.log('✓ 5. 未知面板方法被拒绝');
+}
 
-console.log('\n=== 5. Test buildStatusConfigGroup: Upstream Disconnected ===');
-const noUpstreamData = {
-  ...healthyData,
-  livingmemory_connected: false,
-};
+// ---------- 6. WebUI 声明：状态页与配置页分离 ----------
+{
+  const world = makeWorld({
+    ok: true, livingmemory_connected: true, version: '0.2.2',
+    usage_mode: 'qq', memory_share_mode: 'shared',
+    upstream_capabilities: { a: { label: '记忆引擎', enabled: true } },
+  });
+  const ui = world.webUi();
+  assert.ok(Array.isArray(ui.panels), 'ui.panels 必须是数组');
+  const bridge = ui.panels.find((p) => p.id === 'bridge');
+  assert.ok(bridge, '必须声明 bridge 面板');
+  assert.deepEqual(bridge.getMethods, ['status']);
+  assert.equal(typeof ui.invoke, 'function', '必须提供 invoke 分发');
+  const invoked = ui.invoke('bridge', 'status', []);
+  assert.equal(invoked.ok, true);
+  console.log('✓ 6. 面板声明与 invoke 分发正确');
+}
 
-const noUpstreamGroup = buildStatusConfigGroup(noUpstreamData);
-assert.match(noUpstreamGroup.schema.title, /🟡 桥接已连通 · 上游记忆库未就绪/);
-console.log('No upstream title:', noUpstreamGroup.schema.title);
-console.log('No upstream desc:\n' + noUpstreamGroup.schema.description);
+// ---------- 7. 配置页不再包含状态卡片 ----------
+{
+  const world = makeWorld({
+    ok: true, livingmemory_connected: true, version: '0.2.2',
+    usage_mode: 'qq', memory_share_mode: 'shared',
+    upstream_capabilities: { a: { label: '记忆引擎', enabled: true } },
+  });
+  const ui = world.webUi();
+  const ids = ui.config.map((g) => g.id);
+  assert.ok(!ids.includes('livingmemory-status'), '配置页不应再出现状态卡片');
+  assert.ok(!ids.some((id) => id.startsWith('livingmemory-warn')), '警告卡片也不应留在配置页');
+  assert.ok(ids.includes('livingmemory-recall'), '配置分组应仍在');
+  console.log('✓ 7. 配置页只剩配置项，状态已完全迁出');
+}
 
-console.log('\n=== 6. Test LivingMemoryWorld webUi ===');
-const mockCtx = {
-  id: 'livingmemory',
-  cfg: { ...LIVINGMEMORY_DEFAULTS },
-  timezone: 'Asia/Shanghai',
-  botName: 'test',
-  botDir: 'test',
-  packageDir: 'test',
-  dataDir: 'test',
-  repoRoot: 'test',
-  secret: () => '',
-  storeSecret: () => {},
-  persist: () => {},
-  restart: async () => {},
-};
-
-const world = new LivingMemoryWorld(mockCtx);
-const ui = world.webUi('zh');
-
-assert(Array.isArray(ui.lamps), 'ui.lamps must be an array');
-assert.equal(ui.lamps[0].label, '记忆桥接');
-assert(Array.isArray(ui.badges), 'ui.badges must be an array');
-assert(ui.badges.some(b => b.label === '版本' && b.value === `v${EXTENSION_VERSION}`), 'Must contain version badge');
-assert(Array.isArray(ui.config), 'ui.config must be an array');
-assert.equal(ui.config.length, 4, 'Must have status + recall + capture + advanced config groups');
-assert.equal(ui.config[0].id, 'livingmemory-status', 'Index 0 MUST be livingmemory-status');
-assert.equal(ui.config[1].id, 'livingmemory-recall', 'Index 1 MUST be livingmemory-recall');
-assert.equal(ui.config[2].id, 'livingmemory-capture', 'Index 2 MUST be livingmemory-capture');
-assert.equal(ui.config[3].id, 'livingmemory-advanced', 'Index 3 MUST be livingmemory-advanced');
-
-console.log('Lamps:', ui.lamps);
-console.log('Badges:', ui.badges);
-console.log('Config groups order:', ui.config.map(g => g.id));
-
-console.log('\nAll status display assertions PASSED cleanly!');
+console.log('\nAll status panel assertions PASSED cleanly!');
