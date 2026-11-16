@@ -2,6 +2,16 @@
 
 本文件记录「LivingMemory 桌宠直连扩展 (cortico-world-astrbot-livingmemory)」的版本变化。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.4] - 2026-11-16
+
+### 修复
+
+- **npm 包里缺 `dist` 产物**：`cortico.webUiClient` / `webUiStyle` 指向 `dist/webui.js` / `dist/webui.css`，但 `files` 白名单里没有 `dist`，市场安装后「桥接状态」面板加载不出来。现在 `files` 包含 `dist`；发布前先跑 `npm run build:webui`。
+
+### 变更
+
+- **召回状态改放扩展数据目录**：`livingmemory-recall.json` 从用户主目录 `~/.coopanion/` 挪到 `ctx.dataDir` 下，不再往主目录写东西（认证 issue #948 的建议）。旧文件不会被自动迁移，首次启动会当作没有状态、重新扫一遍事件流。
+
 ## [0.2.3] - 2026-11-15
 
 ### 新增

@@ -8,7 +8,6 @@ import type { Language } from 'cortico/core/language.ts';
 import type { WorldContext, WorldDefinition } from 'cortico/world.ts';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import {
@@ -175,8 +174,12 @@ export class LivingMemoryWorld implements World {
   private recallCursor = 0;
   /** 本次会话的开场批次是否已投过 */
   private sessionSeedDone = false;
-  /** 投递状态落盘位置：跨重启复用，避免每次冷启动全表扫事件流 */
-  private readonly recallStatePath = join(homedir(), '.coopanion', 'livingmemory-recall.json');
+  /** 投递状态落盘位置：跨重启复用，避免每次冷启动全表扫事件流。
+   *  放 ctx.dataDir 下，不再写用户主目录的 ~/.coopanion/（认证 issue #948 的建议，2026-11-16）。
+   *  用 getter 而不是字段：字段初始化早于构造函数里的 this.ctx = ctx。 */
+  private get recallStatePath(): string {
+    return join(this.ctx.dataDir, 'livingmemory-recall.json');
+  }
   private readonly cfg: LivingMemoryConfig;
   private readonly ctx: WorldContext<LivingMemoryConfig>;
 
