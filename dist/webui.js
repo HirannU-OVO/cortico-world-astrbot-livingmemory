@@ -56,7 +56,7 @@ var bridgePanel = {
       }
       const modeGrid = ui.h("div", "lm-grid");
       modeGrid.append(
-        makeCard(ui, "\u8FD0\u884C\u6A21\u5F0F", s.usageLabel || s.usageMode, s.usageMode === "local" ? "\u4E0D\u63A5\u4EFB\u4F55\u5E73\u53F0\uFF0C\u72EC\u7ACB\u4F1A\u8BDD" : "\u684C\u5BA0\u4E0E QQ \u667A\u80FD\u4F53\u5171\u7528"),
+        makeCard(ui, "\u8FD0\u884C\u6A21\u5F0F", s.usageLabel || s.usageMode, s.usageMode === "local" ? "\u4E0D\u63A5\u4EFB\u4F55\u5E73\u53F0\uFF0C\u72EC\u7ACB\u4F1A\u8BDD" : "\u684C\u5BA0\u4E0E AstrBot \u5171\u7528"),
         makeCard(ui, "\u8BB0\u5FC6\u5171\u4EAB", s.shareLabel || s.shareMode, s.shareMode === "pet_only" ? "\u8BB0\u5FC6\u5E93\u9694\u79BB\uFF0C\u4E92\u4E0D\u53EF\u89C1" : "\u5171\u7528\u77E5\u8BC6\u56FE\u8C31\u4E0E\u8BB0\u5FC6\u5E93"),
         makeCard(ui, "\u5DE5\u5177\u9762", `${s.toolsCount} \u4E2A`, "\u7531\u6865\u7AEF manifest \u52A8\u6001\u4E0B\u53D1")
       );
