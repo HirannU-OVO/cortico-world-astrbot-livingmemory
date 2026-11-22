@@ -24,10 +24,10 @@ const client = new LivingMemoryClient({
 });
 
 // 1) 显式传 personaId
-await client.search('测试查询', 3, '大肥鱼');
+await client.search('测试查询', 3, '测试人格');
 assert.equal(captured.length, 1, '应发出一次检索请求');
 assert.ok(captured[0].url.endsWith('/api/memory/search'), 'URL 应为 /api/memory/search');
-assert.equal(captured[0].body.persona_id, '大肥鱼', 'persona_id 必须透传');
+assert.equal(captured[0].body.persona_id, '测试人格', 'persona_id 必须透传');
 assert.equal(captured[0].body.query, '测试查询');
 assert.equal(captured[0].body.limit, 3);
 assert.equal(captured[0].body.session_id, 'group:123');

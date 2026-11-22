@@ -74,5 +74,6 @@ export function eventToTurn(event: EventEnvelope): ChatTurn | null {
   if (type === 'astrbot.message' && meta.notice === true) return null;
 
   const content = textOfUserEvent(event);
-  return content ? { role: 'user', content } : null;
+  const umo = metaString(meta, 'umo');
+  return content ? { role: 'user', content, ...(umo ? { umo } : {}) } : null;
 }

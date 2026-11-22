@@ -44,7 +44,7 @@ function makeWorld(health, opts = {}) {
   const world = makeWorld({
     ok: true, livingmemory_connected: true, version: '0.2.2', upstream_version: '2.13.0',
     usage_mode: 'qq', memory_share_mode: 'shared',
-    default_session_id: 'group:987654321', default_persona_id: '大肥鱼', pet_persona_id: '小肥鱼',
+    default_session_id: 'group:987654321', default_persona_id: '测试人格', pet_persona_id: '小肥鱼',
     upstream_capabilities: {
       a: { label: '上游插件', enabled: true },
       b: { label: '记忆引擎', enabled: true },

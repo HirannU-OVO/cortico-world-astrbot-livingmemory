@@ -21,6 +21,10 @@ export interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: number;
+  /** 桥接会话 id；由当前事件 umo 推导或配置显式指定 */
+  session_id?: string;
+  /** 从事件带出的原始 umo，仅用于推导会话，发送前剔除 */
+  umo?: string;
 }
 
 export interface UpstreamCapabilityInfo {
@@ -54,6 +58,7 @@ export interface LivingMemoryHealth {
   auto_reflection?: boolean;
   usage_mode?: string;
   memory_share_mode?: string;
+  group_memory_read_enabled?: boolean;
   default_session_id?: string;
   default_persona_id?: string;
   pet_persona_id?: string;
@@ -176,6 +181,8 @@ export class LivingMemoryClient {
     limit = 5,
     personaId = '',
     queries?: string[],
+    sessionId = '',
+    memoryMode = '',
   ): Promise<MemorySearchResult[]> {
     const segments = (queries || [])
       .map((q) => String(q ?? '').trim())
@@ -191,7 +198,10 @@ export class LivingMemoryClient {
         query: primary,
         ...(useMulti ? { queries: segments } : {}),
         limit,
-        ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
+        ...(sessionId || this.config.sessionId
+          ? { session_id: sessionId || this.config.sessionId }
+          : {}),
+        ...(memoryMode ? { memory_mode: memoryMode } : {}),
         // 桥端按人格隔离检索；不透传时运行时 personaId 不生效
         ...(withPersona && personaId && !this.personaUnsupported
           ? { persona_id: personaId }
@@ -353,15 +363,29 @@ export class LivingMemoryClient {
     });
   }
 
-  async pushChat(turns: ChatTurn[]): Promise<number> {
+  async pushChat(turns: ChatTurn[], sessionId = '', memoryMode = ''): Promise<number> {
     if (!turns.length) return 0;
+    const configuredSession = String(this.config.sessionId || '').trim();
+    const payloadTurns = turns.map(({ umo: _umo, ...turn }) => {
+      const sid = String(turn.session_id || '').trim();
+      if (sid || !configuredSession) return turn;
+      return { ...turn, session_id: configuredSession };
+    });
+    const turnSessions = payloadTurns.map((t) => String(t.session_id || '').trim());
+    const uniformSession =
+      turnSessions.length > 0 &&
+      turnSessions.every(Boolean) &&
+      new Set(turnSessions).size === 1;
+    // 只有整批都带同一个会话时才发顶层 session；混合批次绝不回落。
+    const topSession = uniformSession ? turnSessions[0] : '';
     const data = await this.request<{ ok: boolean; recorded: number; error?: string }>(
       '/api/memory/chat',
       {
         method: 'POST',
         body: JSON.stringify({
-          turns,
-          ...(this.config.sessionId ? { session_id: this.config.sessionId } : {}),
+          turns: payloadTurns,
+          ...(topSession ? { session_id: topSession } : {}),
+          ...(memoryMode ? { memory_mode: memoryMode } : {}),
         }),
       },
     );

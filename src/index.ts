@@ -24,6 +24,7 @@ import {
   type ManifestResponse,
 } from './client.ts';
 import { eventToTurn } from './capture.ts';
+import { resolveMemoryMode, resolveSessionFromUmo } from './session.ts';
 import { EXTENSION_VERSION } from './version.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
@@ -172,8 +173,21 @@ export class LivingMemoryWorld implements World {
   private recallHydrated = false;
   /** 已认到的事件水位；重启后只补扫这之后的部分 */
   private recallCursor = 0;
-  /** 本次会话的开场批次是否已投过 */
-  private sessionSeedDone = false;
+  /** 每个会话各自是否已投过开场宽口径批次 */
+  private sessionSeedDone = new Set<string>();
+  /** 最近一批进来的会话；render 时与排块会话比对，不一致就丢弃 */
+  private recentInboundSession = '';
+  private liveRecallEpoch = 0;
+  /** 最近一次会话边界：启动首批 / handoff 首批 / 正常批次 */
+  private batchBoundaryReason: 'startup' | 'handoff' | 'none' = 'startup';
+  private personaMismatchWarned = false;
+  private petPersonaWarned = false;
+  private missingSessionWarned = false;
+  private captureWaitLogged = false;
+  private recallWaitLogged = false;
+  private healthResumeLogged = false;
+  private legacySessionWarned = false;
+  private configKeyPresence = { memoryMode: false, sessionId: false };
   /** 投递状态落盘位置：跨重启复用，避免每次冷启动全表扫事件流。
    *  放 ctx.dataDir 下，不再写用户主目录的 ~/.coopanion/（认证 issue #948 的建议，2026-11-16）。
    *  用 getter 而不是字段：字段初始化早于构造函数里的 this.ctx = ctx。 */
@@ -199,6 +213,7 @@ export class LivingMemoryWorld implements World {
     this.ctx = ctx;
     this.cfg = { ...LIVINGMEMORY_DEFAULTS, ...(ctx.cfg || {}) };
     this.client = new LivingMemoryClient(this.cfg);
+    this.refreshConfigKeyPresence();
 
     // 默认工具初始化兜底
     this.activeTools = this.fallbackTools();
@@ -215,18 +230,108 @@ export class LivingMemoryWorld implements World {
     this.isProbing = true;
     try {
       const health = await this.client.health();
+      this.refreshConfigKeyPresence();
+      const wasUnknown = this.lastHealth === null;
       this.lastHealth = health;
+      if (wasUnknown && (this.captureWaitLogged || this.recallWaitLogged) && !this.healthResumeLogged) {
+        this.healthResumeLogged = true;
+        this.captureWaitLogged = false;
+        this.recallWaitLogged = false;
+        this.host?.log?.info?.('[LivingMemory] 桥已探测到，恢复写入与召回');
+      }
       this.lastError = null;
       this.probeCount++;
       return health;
     } catch (err: any) {
       this.lastHealth = null;
+      this.healthResumeLogged = false;
       this.lastError = err?.message || String(err);
       this.probeCount++;
       return null;
     } finally {
       this.isProbing = false;
     }
+  }
+
+  /** 直接读部署 config.json，判断用户配置里是否真的写过这个键。 */
+  private refreshConfigKeyPresence(): void {
+    try {
+      const raw = JSON.parse(
+        readFileSync(join(this.ctx.botDir, 'config.json'), 'utf8'),
+      ) as Record<string, any>;
+      const section = raw?.worlds?.livingmemory ?? {};
+      this.configKeyPresence = {
+        memoryMode: Object.prototype.hasOwnProperty.call(section, 'memoryMode'),
+        sessionId: Object.prototype.hasOwnProperty.call(section, 'sessionId'),
+      };
+    } catch {
+      // 读不到就按新用户默认处理；行为仍是桥默认 + umo。
+    }
+  }
+
+  /** 当前桌宠记忆模式（面板中文值归一成协议值）。 */
+  private memoryMode(): 'shared' | 'pet_only' {
+    return resolveMemoryMode(
+      this.configKeyPresence.memoryMode,
+      this.liveCfg('memoryMode', 'shared'),
+      this.lastHealth?.memory_share_mode,
+    );
+  }
+
+  /** 桥端人格前缀：共用用 default，单独用 pet_persona，缺失回落并只警告一次。 */
+  private bridgePersona(mode = this.memoryMode()): string {
+    const h = this.lastHealth;
+    const configured = String(this.liveCfg('personaId', '') || '').trim();
+    if (mode === 'pet_only') {
+      const pet = String(h?.pet_persona_id || '').trim();
+      if (pet) return pet;
+      if (!this.petPersonaWarned) {
+        this.petPersonaWarned = true;
+        this.host?.log?.warn?.(
+          '[LivingMemory] pet_persona_id 为空，桌宠单独记忆回落桥默认人格',
+        );
+      }
+    }
+    const bridgePersona = String(h?.default_persona_id || '').trim();
+    if (
+      mode === 'shared' &&
+      configured &&
+      bridgePersona &&
+      configured !== bridgePersona &&
+      !this.personaMismatchWarned
+    ) {
+      this.personaMismatchWarned = true;
+      this.host?.log?.warn?.(
+        `[LivingMemory] 配置人格 ${configured} 与桥默认人格 ${bridgePersona} 不一致，已使用桥默认人格`,
+      );
+    }
+    return bridgePersona || configured;
+  }
+
+  /** 会话：旧显式配置优先兼容；否则 umo 优先；最后桥默认。 */
+  private resolveSession(umo: string | null | undefined): string | null {
+    const explicit = String(this.liveCfg('sessionId', '') || '').trim();
+    if (explicit) {
+      if (!this.legacySessionWarned) {
+        this.legacySessionWarned = true;
+        this.host?.log?.info?.(
+          '[LivingMemory] 检测到旧 sessionId，启用旧配置兼容模式（显式会话优先）',
+        );
+      }
+      return explicit;
+    }
+    const fromEvent = resolveSessionFromUmo(umo, this.bridgePersona());
+    if (fromEvent) return fromEvent;
+    if (umo) return null;
+    const fallback = String(this.lastHealth?.default_session_id || '').trim();
+    if (fallback) return fallback;
+    if (!this.missingSessionWarned) {
+      this.missingSessionWarned = true;
+      this.host?.log?.warn?.(
+        '[LivingMemory] 无法确定会话：事件无 umo，桥也未提供 default_session_id',
+      );
+    }
+    return null;
   }
 
   /**
@@ -408,7 +513,7 @@ export class LivingMemoryWorld implements World {
       health.usage_mode === 'local'
         ? '纯桌宠（独立记忆库）'
         : health.usage_mode === 'qq'
-          ? '接入 QQ（共用会话与记忆库）'
+          ? '接入 AstrBot（共用会话与记忆库）'
           : String(health.usage_mode || '未填');
     const share = health.memory_share_mode === 'pet_only' ? '桌宠单独记（隔离）' : '一起记（共用图谱）';
 
@@ -635,7 +740,7 @@ export class LivingMemoryWorld implements World {
     const h = this.lastHealth;
     const connected = !!h && h.ok;
     const lmConnected = !!h && h.livingmemory_connected;
-    const usage = h?.usage_mode === 'local' ? '纯桌宠' : '接入 QQ';
+    const usage = h?.usage_mode === 'local' ? '纯桌宠' : '接入 AstrBot';
     const share = h?.memory_share_mode === 'pet_only' ? '单独记' : '一起记';
 
     const disabledCaps = Object.values(h?.upstream_capabilities || {}).filter((c) => !c.enabled);
@@ -714,7 +819,7 @@ export class LivingMemoryWorld implements World {
       upstreamVersion: h?.upstream_version ? `v${h.upstream_version}` : '',
       upstreamConnected: !!h?.livingmemory_connected,
       usageMode: h?.usage_mode || '',
-      usageLabel: h?.usage_mode === 'local' ? '纯桌宠模式' : '接入 QQ 模式',
+      usageLabel: h?.usage_mode === 'local' ? '纯桌宠模式' : '接入 AstrBot 模式',
       shareMode: h?.memory_share_mode || '',
       shareLabel: h?.memory_share_mode === 'pet_only' ? '桌宠单独记' : '一起记',
       sessionId: h?.default_session_id || '',
@@ -834,7 +939,9 @@ export class LivingMemoryWorld implements World {
 
   /** 上下文交接：刷新窗口与开场标记，游标用当前水位而不是清零。 */
   private onHandoffEnded(): void {
-    this.sessionSeedDone = false;
+    this.sessionSeedDone.clear();
+    this.recentInboundSession = '';
+    this.batchBoundaryReason = 'handoff';
     this.recallHydrated = true;
     // 上下文重建后旧的注入内容已不在上下文里，窗口一并清零，
     // 让开场批能重新投一轮（与上游「每轮摘掉再投」的语义对齐）
@@ -901,9 +1008,12 @@ export class LivingMemoryWorld implements World {
       if (!turn) continue;
       const content = String(turn.content || '').trim();
       if (!content) continue;
+      const sessionId = this.resolveSession(turn.umo);
+      if (!sessionId) continue;
       turns.push({
         ...turn,
         content,
+        session_id: sessionId,
         timestamp: typeof e.ts === 'number' ? e.ts / 1000 : Date.now() / 1000,
       });
     }
@@ -924,21 +1034,28 @@ export class LivingMemoryWorld implements World {
 
     // query 取最近一段用户对话，热身时没有当前消息
     let texts: string[] = [];
+    let warmupSessionId = '';
     if (store?.range && latest > 0) {
       try {
         const from = Math.max(0, latest - 200);
         const events = store.range({ fromCursor: from, toCursor: latest }) ?? [];
+        const warmTurns = events
+          .map((e: any) => eventToTurn(e))
+          .filter((t: ChatTurn | null): t is ChatTurn => !!t);
         texts = pickUserTexts(events).slice(-2);
+        const lastUmo = [...warmTurns].reverse().find((t) => t.umo)?.umo;
+        warmupSessionId = this.resolveSession(lastUmo) || '';
       } catch {
         texts = [];
       }
     }
-    if (texts.length) {
+    if (texts.length && warmupSessionId) {
       const built = await this.buildRecallText(
         texts,
         Math.max(1, Math.min(50, Number(this.liveCfg('sessionSeedTopK', 20)) || 20)),
         Math.max(100, Number(this.liveCfg('sessionSeedMaxChars', 400)) || 400),
         this.liveRecall,
+        warmupSessionId,
       );
       if (built) {
         this.warmRecallText = built.text;
@@ -957,13 +1074,27 @@ export class LivingMemoryWorld implements World {
         senderKey: 'livingmemory.recall',
         meta: { kind: 'recall', batch: 'warmup' },
         render: async () => {
+          if (!warmupSessionId) return null;
+          if (this.recentInboundSession && this.recentInboundSession !== warmupSessionId) {
+            this.host?.log?.warn?.(
+              `预热召回丢弃(跨会话)：期望会话 ${warmupSessionId}，当前批次 ${this.recentInboundSession}`,
+            );
+            return null;
+          }
+          if (!this.recentInboundSession) {
+            this.host?.log?.info?.(
+              `预热召回放行(启动首批)：会话 ${warmupSessionId}`,
+            );
+            this.recentInboundSession = warmupSessionId;
+            this.batchBoundaryReason = 'none';
+          }
           if (!this.warmRecallText) {
             this.host?.log?.info?.('预热召回渲染：无可投内容（返回 null）');
             return null;
           }
           const text = this.warmRecallText;
           this.warmRecallText = '';
-          this.sessionSeedDone = true;
+          this.sessionSeedDone.add(warmupSessionId);
           this.host?.log?.info?.(
             `预热召回渲染：直接投出缓存 ${text.length} 字（不等检索）`,
           );
@@ -1002,7 +1133,14 @@ export class LivingMemoryWorld implements World {
     const wantLive = !(
       liveRaw === false || String(liveRaw ?? '').trim().toLowerCase() === 'off'
     );
-    const wantSeed = this.liveCfg('sessionSeedRecall', true) !== false && !this.sessionSeedDone;
+    const sessionId =
+      turns[turns.length - 1]?.session_id ||
+      String(this.liveCfg('sessionId', '') || '');
+    this.recentInboundSession = sessionId;
+    this.batchBoundaryReason = 'none';
+    const wantSeed =
+      this.liveCfg('sessionSeedRecall', true) !== false &&
+      !!sessionId && !this.sessionSeedDone.has(sessionId);
     if (!wantLive && !wantSeed) return;
 
     // 只把 2 小时内的上一轮拼进 query，避免把几天前的旧话硬接上
@@ -1018,15 +1156,17 @@ export class LivingMemoryWorld implements World {
       .map((turn) => String(turn.content || '').replace(/\s+/g, ' ').trim())
       .filter((text) => text.length >= 2);
     if (!userTexts.length) return;
+    if (!sessionId) return;
 
-    this.scheduleLiveRecall(userTexts);
+    this.liveRecallEpoch += 1;
+    this.scheduleLiveRecall(userTexts, sessionId, this.liveRecallEpoch);
   }
 
   /**
    * 实时批次：延迟渲染，随当轮批次一起投递。
    * render 在宿主投递批内被 await；返回 null 时既不落库也不投递。
    */
-  private scheduleLiveRecall(userTexts: string[]): void {
+  private scheduleLiveRecall(userTexts: string[], sessionId: string, epoch: number): void {
     const host = this.host as any;
     if (!host?.pushDeferred) {
       this.host?.log?.warn?.('宿主不支持 pushDeferred，实时召回跳过');
@@ -1040,7 +1180,7 @@ export class LivingMemoryWorld implements World {
         origin: 'external',
         senderKey: 'livingmemory.recall',
         meta: { kind: 'recall', batch: 'live' },
-        render: () => this.renderLiveRecall(topK, userTexts),
+        render: () => this.renderLiveRecall(topK, userTexts, sessionId, epoch),
       },
       { trigger: 'piggyback' },
     );
@@ -1050,9 +1190,32 @@ export class LivingMemoryWorld implements World {
   private async renderLiveRecall(
     topK: number,
     userTexts: string[],
+    sessionId: string,
+    epoch?: number,
   ): Promise<{ text: string } | null> {
+    if (!sessionId) return null;
+    if (epoch !== undefined && epoch !== this.liveRecallEpoch) {
+      this.host?.log?.debug?.(
+        `实时召回跳过(同轮多排)：丢弃会话 ${sessionId}，保留 ${this.recentInboundSession || 'null'}`,
+      );
+      return null;
+    }
+    if (this.recentInboundSession && this.recentInboundSession !== sessionId) {
+      this.host?.log?.warn?.(
+        `实时召回丢弃(跨会话)：期望会话 ${sessionId}，当前批次 ${this.recentInboundSession}`,
+      );
+      return null;
+    }
+    if (!this.recentInboundSession) {
+      const label = this.batchBoundaryReason === 'handoff' ? '交接后首批' : '无批次';
+      this.host?.log?.info?.(
+        `实时召回放行(${label})：会话 ${sessionId}`,
+      );
+      this.recentInboundSession = sessionId;
+      this.batchBoundaryReason = 'none';
+    }
     // 首轮用开场口径（宽），之后用实时口径（窄）；两条预算各算各的
-    const isFirst = !this.sessionSeedDone;
+    const isFirst = !this.sessionSeedDone.has(sessionId);
     const effectiveTopK = isFirst
       ? Math.max(1, Math.min(50, Number(this.liveCfg('sessionSeedTopK', 20)) || 20))
       : topK;
@@ -1067,7 +1230,7 @@ export class LivingMemoryWorld implements World {
         timer.unref?.();
       });
       const built = await Promise.race([
-        this.buildLiveRecall(effectiveTopK, userTexts, effectiveBudget),
+        this.buildLiveRecall(effectiveTopK, userTexts, effectiveBudget, sessionId),
         guard,
       ]);
       if (!built) {
@@ -1093,13 +1256,21 @@ export class LivingMemoryWorld implements World {
     topK: number,
     userTexts: string[],
     budgetChars: number,
+    sessionId: string,
   ): Promise<{ text: string; count: number; used: number } | null> {
     if (!userTexts.length) return null;
+    if (!this.lastHealth) {
+      if (!this.recallWaitLogged) {
+        this.recallWaitLogged = true;
+        this.host?.log?.info?.('[LivingMemory] 桥未探测，跳过召回');
+      }
+      return null;
+    }
     const latest = (this.host as any)?.store?.latestCursor?.() ?? 0;
     if (latest > this.lastHandledCursor) this.lastHandledCursor = latest;
 
-    const built = await this.buildRecallText(userTexts, topK, budgetChars, this.liveRecall);
-    if (built) this.sessionSeedDone = true;
+    const built = await this.buildRecallText(userTexts, topK, budgetChars, this.liveRecall, sessionId);
+    if (built) this.sessionSeedDone.add(sessionId);
     return built;
   }
 
@@ -1114,6 +1285,7 @@ export class LivingMemoryWorld implements World {
     limit: number,
     budgetChars: number,
     target: RecentRecallWindow,
+    sessionId: string,
   ): Promise<{ text: string; count: number; used: number; fingerprints: string[] } | null> {
     const header =
       '【长期记忆】以下是你和对方过去真实发生过的事，相关时自然用上，' +
@@ -1128,7 +1300,7 @@ export class LivingMemoryWorld implements World {
       metadata?: Record<string, unknown>;
     }> = [];
     try {
-      memories = (await this.client.search(query, limit, String(this.liveCfg('personaId', '') || ''))) || [];
+      memories = (await this.client.search(query, limit, this.bridgePersona(), undefined, sessionId, this.memoryMode())) || [];
       const elapsed = Date.now() - searchStart;
       if (elapsed > 1500) {
         this.host?.log?.warn?.(`记忆检索较慢 ${elapsed}ms，limit=${limit} 命中=${memories.length}`);
@@ -1176,6 +1348,13 @@ export class LivingMemoryWorld implements World {
   }
 
   private async captureIncoming(): Promise<number> {
+    if (!this.lastHealth) {
+      if (!this.captureWaitLogged) {
+        this.captureWaitLogged = true;
+        this.host?.log?.info?.('[LivingMemory] 桥未探测，暂缓写入');
+      }
+      return 0;
+    }
     const host = this.host as any;
     if (!host) return 0;
     if (host.isPaused?.() === true) return 0;
@@ -1191,34 +1370,42 @@ export class LivingMemoryWorld implements World {
       return 0;
     }
 
-    const turns: ChatTurn[] = [];
+    const buckets = new Map<string, ChatTurn[]>();
     for (const e of events) {
       const turn = eventToTurn(e);
       if (!turn) continue;
       const content = turn.content.trim();
       if (!content || content.length < (this.cfg.captureMinLength || 2)) continue;
-      turns.push({
+      const sessionId = this.resolveSession(turn.umo);
+      if (!sessionId) continue;
+      const list = buckets.get(sessionId) ?? [];
+      list.push({
         ...turn,
         content,
+        session_id: sessionId,
         timestamp: typeof e.ts === 'number' ? e.ts / 1000 : Date.now() / 1000,
       });
+      buckets.set(sessionId, list);
     }
 
-    if (!turns.length) {
+    if (!buckets.size) {
       this.lastCursor = to;
       return 0;
     }
 
 
     try {
-      const recorded = await this.client.pushChat(turns);
+      let recorded = 0;
+      for (const [sessionId, groupTurns] of buckets) {
+        recorded += await this.client.pushChat(groupTurns, sessionId, this.memoryMode());
+      }
       this.lastCursor = to;
       this.pushFailStreak = 0;
       return recorded;
     } catch {
       this.pushFailStreak += 1;
       if (this.pushFailStreak >= 5) {
-        this.host?.log?.warn?.(`[LivingMemory] 连续 ${this.pushFailStreak} 次推送失败，跳过游标 ${this.lastCursor + 1}~${to} 的 ${turns.length} 条对话`);
+        this.host?.log?.warn?.(`[LivingMemory] 连续 ${this.pushFailStreak} 次推送失败，跳过游标 ${this.lastCursor + 1}~${to} 的 ${[...buckets.values()].reduce((n, xs) => n + xs.length, 0)} 条对话`);
         this.lastCursor = to;
         this.pushFailStreak = 0;
       }

@@ -107,7 +107,7 @@ const bridgePanel: WebUiPanel = {
       // ---------- 运行模式与共享 ----------
       const modeGrid = ui.h('div', 'lm-grid');
       modeGrid.append(
-        makeCard(ui, '运行模式', s.usageLabel || s.usageMode, s.usageMode === 'local' ? '不接任何平台，独立会话' : '桌宠与 QQ 智能体共用'),
+        makeCard(ui, '运行模式', s.usageLabel || s.usageMode, s.usageMode === 'local' ? '不接任何平台，独立会话' : '桌宠与 AstrBot 共用'),
         makeCard(ui, '记忆共享', s.shareLabel || s.shareMode, s.shareMode === 'pet_only' ? '记忆库隔离，互不可见' : '共用知识图谱与记忆库'),
         makeCard(ui, '工具面', `${s.toolsCount} 个`, '由桥端 manifest 动态下发'),
       );

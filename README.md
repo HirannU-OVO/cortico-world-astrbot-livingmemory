@@ -9,7 +9,19 @@
 > - AstrBot 端必须成对安装配套桥接插件：[astrbot_plugin_coopanion_livingmemory](https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory)；
 > - 两者通过本地 HTTP 接口对接，**必须成对安装运行**。
 
----
+## 先看这里：你的记忆里有没有 AstrBot
+
+第一步，在 AstrBot 的记忆桥设置里选「使用场景」：
+
+- 只有桌宠、没有 AstrBot 参与 → 选「纯桌宠」
+- AstrBot 也参与对话（它自己回 QQ，或桌宠接管了它的对话）→ 选「接入 AstrBot」
+
+第二步，如果上一步选了「接入 AstrBot」，再到桌宠设置里选「桌宠的记忆」：
+
+- 「与 AstrBot 共享」→ 桌宠和 AstrBot 用同一份记忆，能互相召回
+- 「桌宠单独一份」→ 桌宠自己记，AstrBot 看不到
+
+选了「纯桌宠」的话，第二步不用管，那个下拉不起作用。
 
 ## 架构与分工
 
@@ -47,6 +59,10 @@ astrbot_plugin_livingmemory（记忆库 + 知识图谱 + 会话蒸馏）
 ---
 
 ## 安装与快速上手
+
+> **多端一起升级**：本扩展、AstrBot 插件 `astrbot_plugin_coopanion_livingmemory`、QQ 消息接入扩展 `cortico-world-astrbot` 要一起升级；只升一侧会出现面板项对不上。若同时使用 Cortico 桥，还需要 `astrbot_plugin_cortico_bridge` 1.3.7 或更高。
+>
+> **Cortico 桥安装提示**：AstrBot 插件面板里默认的插件源指向旧版本，装不到 1.3.7；需要手动把插件源改成 GitHub 仓库 https://github.com/as124da1231/astrbot_plugin_cortico_bridge 再安装或更新。
 
 ### 1. 安装前置插件
 
@@ -95,7 +111,7 @@ git clone https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory.g
 
 1. **配置栏直观状态卡片**：打开桌宠设置面板 -> 扩展「LivingMemory 桌宠直连」，配置栏最顶上会直接展示「运行状态与能力概览」卡片：
    - 包含桥接服务状态、上游 LivingMemory 就绪情况与版本；
-   - 当前运行模式（接入 QQ / 纯桌宠、一起记 / 桌宠单独记）；
+   - 当前运行模式（接入 AstrBot / 纯桌宠、一起记 / 桌宠单独记）；
    - 上游 7 项核心能力运行检查（记忆引擎、对话管理、记忆反思、知识图谱与数据库、人格迁移）；
    - 绑定的会话与人格，如遇上游能力降级或配置冲突会有醒目黄/红色提示；
 2. **对话式自检**：在桌宠里说一句「查一下记忆通不通」，它会调 `mem_status` 报出桥接状态与各项能力；
@@ -116,7 +132,7 @@ git clone https://github.com/HirannU-OVO/astrbot_plugin_coopanion_livingmemory.g
 | `mem_recall(query, limit?, include_source?, target?, start_time?, end_time?)` | 精准召回；核对历史约定与细节偏好，可按说话人或时间范围检索 |
 | `mem_evidence(memory_id, include_source?, cursor?)` | 深读某条记忆的结构化有效事实与原始消息全文，支持续读游标 |
 | `mem_forget(memory_ids, reason?)` | 归档并软删除过时或错误的记忆；仅管理员可用，可由管理员恢复 |
-| `mem_status()` | 自检桥接状态：上游记忆库连没连上、当前是接入 QQ 还是纯桌宠、挂在哪个会话与人格 |
+| `mem_status()` | 自检桥接状态：上游记忆库连没连上、当前是接入 AstrBot 还是纯桌宠、挂在哪个会话与人格 |
 
 在桌宠里说一句「查一下记忆通不通」，它就会调 `mem_status` 把状态说出来；纯桌宠、不接任何平台时也能用，不必打命令行。
 

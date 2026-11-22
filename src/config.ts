@@ -12,6 +12,8 @@ export interface LivingMemoryConfig {
   authToken: string;
   timeoutMs: number;
   sessionId: string;
+  /** 桌宠记忆模式：与 AstrBot 共享 / 桌宠单独一份 */
+  memoryMode: '与 AstrBot 共享' | '桌宠单独一份' | 'shared' | 'pet_only';
   /** 桥端按人格隔离检索时使用的人格 ID；留空则跟随桥端默认人格 */
   personaId: string;
   autoCapture: boolean;
@@ -40,8 +42,9 @@ export const LIVINGMEMORY_DEFAULTS: LivingMemoryConfig = {
   bridgeUrl: 'http://127.0.0.1:6198',
   authToken: '',
   timeoutMs: 5000,
-  // 留空 = 用桥端配置的默认会话，普通用户装完即可用，不必先知道 umo 格式
+  // 留空 = 按当前 QQ 事件的 umo 自动识别会话；填了则强制使用该会话
   sessionId: '',
+  memoryMode: '与 AstrBot 共享',
   // 留空 = 用桥端默认人格，普通用户不用填
   personaId: '',
   autoCapture: true,
@@ -158,7 +161,7 @@ export function buildStatusGroups(
     title = '🟢 桥接正常 · 记忆库与能力就绪';
   }
 
-  const usageLabel = health.usage_mode === 'local' ? '纯桌宠模式（独立会话与记忆库）' : '接入 QQ 模式（桌宠与 QQ 智能体共用）';
+  const usageLabel = health.usage_mode === 'local' ? '纯桌宠模式（独立会话与记忆库）' : '接入 AstrBot 模式（桌宠与 AstrBot 共用）';
   const shareLabel = health.memory_share_mode === 'pet_only' ? '桌宠单独记（记忆库隔离）' : '一起记（共用知识图谱与记忆库）';
   const upstreamVer = health.upstream_version ? `v${health.upstream_version}` : '已连接';
 
@@ -194,7 +197,7 @@ export function buildStatusGroups(
       schema: {
         type: 'object',
         title: '运行模式',
-        description: `${usageLabel}；记忆共享：${shareLabel}。`,
+        description: `${usageLabel}；记忆共享：${shareLabel}；群聊记忆：${health.group_memory_read_enabled === false ? '关闭' : '开启'}。`,
         properties: {},
       },
     },
@@ -254,6 +257,27 @@ export function buildStatusGroups(
  * 基础配置组与高级配置组
  */
 export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
+  {
+    id: 'livingmemory-memory-mode',
+    owner: 'world:livingmemory',
+    schema: {
+      type: 'object',
+      title: '桌宠的记忆',
+      description: '选择桌宠与 AstrBot 是共享一份长期记忆，还是各记各的。',
+      properties: {
+        'worlds.livingmemory.memoryMode': {
+          type: 'string',
+          title: '桌宠的记忆',
+          description:
+            '与 AstrBot 共享：AstrBot 和桌宠读写同一份长期记忆。若配置文件里没有本项、且桥仍是旧的「桌宠单独」配置，会自动沿用旧配置。' +
+            '桌宠单独一份：桌宠只记自己的对话，不和 AstrBot 混。' +
+            '（旧配置里填过 sessionId 的用户会自动进入「旧配置兼容模式」，继续以显式会话优先。）',
+          enum: ['与 AstrBot 共享', '桌宠单独一份'],
+          'x-hot': true,
+        },
+      },
+    },
+  },
   {
     id: 'livingmemory-recall',
     owner: 'world:livingmemory',
@@ -405,16 +429,27 @@ export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
           'x-suffix': 'ms',
           'x-hot': false,
         },
-        'worlds.livingmemory.sessionId': {
-          type: 'string',
-          title: '（高级）记忆存到哪个会话',
-          description: '桌宠的对话存进哪个会话；留空就跟着 AstrBot 那边，平时不用填',
-          'x-hot': false,
-        },
         'worlds.livingmemory.personaId': {
           type: 'string',
           title: '（高级）按哪个人格检索',
           description: '桥端按人格隔离记忆时用；留空就跟随桥端默认人格，平时不用填',
+          'x-hot': false,
+        },
+      },
+    },
+  },
+  {
+    id: 'livingmemory-legacy',
+    owner: 'world:livingmemory',
+    schema: {
+      type: 'object',
+      title: '旧配置兼容',
+      description: '一般不用改；留空表示自动。影响：桌宠/AstrBot 两边。',
+      properties: {
+        'worlds.livingmemory.sessionId': {
+          type: 'string',
+          title: '旧配置兼容：会话',
+          description: '一般不用改，留空表示自动；清空并保存即可恢复自动。影响：桌宠/AstrBot 两边。',
           'x-hot': false,
         },
       },
