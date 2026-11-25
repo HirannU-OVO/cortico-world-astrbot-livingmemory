@@ -2,6 +2,24 @@
 
 本文件记录「LivingMemory 桌宠直连扩展 (cortico-world-astrbot-livingmemory)」的版本变化。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.6] - 2026-11-25
+
+配套版本：
+
+- Coopanion 侧扩展 `cortico-world-astrbot-livingmemory` 0.2.6 或更高
+- AstrBot 侧插件 `astrbot_plugin_coopanion_livingmemory` 2.5.0 或更高
+
+两侧要一起升级，只升一侧面板项会对不上。
+
+### 新增
+
+- 版本号一致性用例：`test/version_sync.test.mjs` 校验 `src/version.ts` 的 `EXTENSION_VERSION` 与 `package.json` 的 `version` 是否一致，避免发版时只改一边。
+
+### 兼容
+
+- 本体代码无功能改动，本版为配合桥端 2.5.0 的版本对齐。
+- 桥端 2.5.0 把群聊记忆拆成「写入」「读取」两组三档后，状态面板那句「群聊记忆：开启/关闭」反映的是**读取**这一档（`group_memory_read_scope` 是否为 `off`）。写入档目前不单独显示，下一版补。
+
 ## [0.2.5] - 2026-11-22
 
 配套版本：
