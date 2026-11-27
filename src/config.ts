@@ -42,7 +42,7 @@ export const LIVINGMEMORY_DEFAULTS: LivingMemoryConfig = {
   bridgeUrl: 'http://127.0.0.1:6198',
   authToken: '',
   timeoutMs: 5000,
-  // 留空 = 按当前 QQ 事件的 umo 自动识别会话；填了则强制使用该会话
+  // 留空 = 按当前 QQ 事件的 umo 自动识别会话；无 umo 时才使用本配置
   sessionId: '',
   memoryMode: '与 AstrBot 共享',
   // 留空 = 用桥端默认人格，普通用户不用填
@@ -271,7 +271,7 @@ export const LIVINGMEMORY_CONFIG_GROUPS: ConfigGroup[] = [
           description:
             '与 AstrBot 共享：AstrBot 和桌宠读写同一份长期记忆。若配置文件里没有本项、且桥仍是旧的「桌宠单独」配置，会自动沿用旧配置。' +
             '桌宠单独一份：桌宠只记自己的对话，不和 AstrBot 混。' +
-            '（旧配置里填过 sessionId 的用户会自动进入「旧配置兼容模式」，继续以显式会话优先。）',
+            '（旧配置里填过 sessionId 的用户会自动进入「旧配置兼容模式」，事件无会话时仍以显式会话优先。）',
           enum: ['与 AstrBot 共享', '桌宠单独一份'],
           'x-hot': true,
         },

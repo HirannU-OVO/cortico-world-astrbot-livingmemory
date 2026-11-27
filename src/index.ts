@@ -122,26 +122,43 @@ function formatDateTag(raw: unknown): string {
   return ageDays > 7 ? `以前·${dayLabel}` : dayLabel;
 }
 
-/** 从事件批里挑出用户正文，过滤 internal、自身 recall 与系统通知。 */
-function pickUserTexts(events: unknown[]): string[] {
+/** 从事件批里挑出用户正文，过滤 internal、自身 recall、已由输入通道写入的入站消息与系统通知。 */
+function pickUserTexts(events: unknown[], matchUmo = ''): string[] {
   const texts: string[] = [];
   for (const raw of events) {
     const e = raw as {
       type?: string;
+      source?: string;
       origin?: string;
       text?: string;
       meta?: Record<string, unknown>;
     };
     if (!e || e.origin === 'internal') continue;
+    if ((e.meta as any)?.noCapture === true) continue;
+    if (e.source === 'pet-brain' || (e.meta as any)?.mount === 'cortico-world-pet-brain') continue;
     if (!e.type || !USER_MESSAGE_TYPES.has(e.type)) continue;
+    if (matchUmo) {
+      const evUmo = typeof (e.meta as any)?.umo === 'string' ? String((e.meta as any).umo).trim() : '';
+      if (evUmo !== matchUmo) continue;
+    }
     const body =
       String((e.meta as any)?.body || (e.meta as any)?.text || e.text || '').trim();
-    // AstrBot/QQ 事件正文尾部会带「回这条用 xxx」的提示，不是用户原话
+    // 剥离注入的【相关记忆】/【长期记忆】、群聊上下文、回复提示与【QQ...】头部，避免用旧记忆当查询词
     const cleaned = body
-      .replace(/\n?（回这条用[^\n]*$/u, '')
-      .replace(/\n?\(回这条用[^\n]*$/u, '')
+      .replace(/\[群聊上下文\s*·\s*[^\]]*\][\s\S]*?\[\/群聊上下文\]\s*/gu, '')
+      .replace(/\n*\s*【(?:相关记忆|长期记忆)】[\s\S]*$/u, '')
+      .replace(/\n*\s*【LivingMemory\s+(?:记忆检索结果|记忆召回|记忆证据|桥接状态)[^\n]*】[\s\S]*$/u, '')
+      .replace(/\n?[（(](?:回(?:这条)?用|回[：:]|主动搭话[：:])[^\n]*$/u, '')
+      .replace(/^【QQ[^】]*】\s*/u, '')
       .trim();
-    if (cleaned.length >= 2) texts.push(cleaned);
+    if (
+      cleaned.length >= 2 &&
+      !/^-\s*\[(?:20\d{2}-\d{2}-\d{2}\b|(?:以前·)?\d{1,2}月\d{1,2}日\])/.test(cleaned) &&
+      !/^用户档案[：:]/.test(cleaned) &&
+      !/^\[(?:system|唤醒器|应用更新|群聊上下文\b)/i.test(cleaned)
+    ) {
+      texts.push(cleaned);
+    }
   }
   return texts;
 }
@@ -177,6 +194,8 @@ export class LivingMemoryWorld implements World {
   private sessionSeedDone = new Set<string>();
   /** 最近一批进来的会话；render 时与排块会话比对，不一致就丢弃 */
   private recentInboundSession = '';
+  /** 捕获流最近一次观察到的入站会话（含输入通道预写消息），用于防止 desktop-pet.self 串线到私聊 */
+  private lastCapturedInboundSession = '';
   private liveRecallEpoch = 0;
   /** 最近一次会话边界：启动首批 / handoff 首批 / 正常批次 */
   private batchBoundaryReason: 'startup' | 'handoff' | 'none' = 'startup';
@@ -308,21 +327,49 @@ export class LivingMemoryWorld implements World {
     return bridgePersona || configured;
   }
 
-  /** 会话：旧显式配置优先兼容；否则 umo 优先；最后桥默认。 */
-  private resolveSession(umo: string | null | undefined): string | null {
+  /** 从单条事件提取入站会话标识（含输入通道预写消息，仅用于活跃会话追踪与防串线，不触发写入）。 */
+  private observeInboundSession(event: EventEnvelope): string | null {
+    const meta = (event.meta || {}) as Record<string, unknown>;
+    const type = event.type || '';
+    if (type === 'qq.message' || type === 'astrbot.message') {
+      if (meta.notice === true) return null;
+      const postType = typeof meta.post_type === 'string' ? meta.post_type.trim().toLowerCase() : '';
+      if (postType && postType !== 'message') return null;
+      const umo = typeof meta.umo === 'string' ? meta.umo.trim() : '';
+      if (umo) {
+        const resolved = resolveSessionFromUmo(umo, this.bridgePersona());
+        if (resolved) return resolved;
+        if (umo.includes('GroupMessage')) return 'group:unknown';
+        return null;
+      }
+      if (meta.message_type === 'group' || meta.group_id) return 'group:unknown';
+      return null;
+    }
+    if (type === 'desktop-pet.message' || type === 'desktop-pet.speech') {
+      return this.resolveSession(undefined) || 'desktop:local';
+    }
+    return null;
+  }
+
+  /** 会话：事件 umo 优先；无 umo 时才用显式配置；最后按需回落桥默认。 */
+  private resolveSession(
+    umo: string | null | undefined,
+    opts?: { allowDefaultFallback?: boolean },
+  ): string | null {
+    const fromEvent = resolveSessionFromUmo(umo, this.bridgePersona());
+    if (fromEvent) return fromEvent;
+    if (umo) return null;
     const explicit = String(this.liveCfg('sessionId', '') || '').trim();
     if (explicit) {
       if (!this.legacySessionWarned) {
         this.legacySessionWarned = true;
         this.host?.log?.info?.(
-          '[LivingMemory] 检测到旧 sessionId，启用旧配置兼容模式（显式会话优先）',
+          '[LivingMemory] 检测到旧 sessionId，启用旧配置兼容模式（无 umo 时使用显式会话）',
         );
       }
       return explicit;
     }
-    const fromEvent = resolveSessionFromUmo(umo, this.bridgePersona());
-    if (fromEvent) return fromEvent;
-    if (umo) return null;
+    if (opts?.allowDefaultFallback === false) return null;
     const fallback = String(this.lastHealth?.default_session_id || '').trim();
     if (fallback) return fallback;
     if (!this.missingSessionWarned) {
@@ -413,6 +460,10 @@ export class LivingMemoryWorld implements World {
       const res = await this.client.callTool(tool.name, tool.endpoint, tool.http_method, args);
 
       // 针对各工具进行人性化输出格式化
+      if (res?.code === 'missing_session') {
+        return `⚠ 缺少会话作用域 (session_id): ${res.warning || '调用方未提供 session'}`;
+      }
+
       if (tool.name === 'mem_search') {
         // 多段检索：queries 优先，缺省回落到单段 query；两者都没有才算空
         const label = describeQueryLabel(args);
@@ -1004,6 +1055,10 @@ export class LivingMemoryWorld implements World {
 
     const turns: ChatTurn[] = [];
     for (const e of events) {
+      const observed = this.observeInboundSession(e);
+      if (observed) {
+        this.recentInboundSession = observed;
+      }
       const turn = eventToTurn(e);
       if (!turn) continue;
       const content = String(turn.content || '').trim();
@@ -1042,9 +1097,10 @@ export class LivingMemoryWorld implements World {
         const warmTurns = events
           .map((e: any) => eventToTurn(e))
           .filter((t: ChatTurn | null): t is ChatTurn => !!t);
-        texts = pickUserTexts(events).slice(-2);
         const lastUmo = [...warmTurns].reverse().find((t) => t.umo)?.umo;
-        warmupSessionId = this.resolveSession(lastUmo) || '';
+        texts = pickUserTexts(events, lastUmo || '').slice(-2);
+        const allowDefaultFallback = this.lastHealth?.usage_mode === 'local';
+        warmupSessionId = this.resolveSession(lastUmo, { allowDefaultFallback }) || '';
       } catch {
         texts = [];
       }
@@ -1072,9 +1128,33 @@ export class LivingMemoryWorld implements World {
         source: this.id,
         origin: 'external',
         senderKey: 'livingmemory.recall',
-        meta: { kind: 'recall', batch: 'warmup' },
+        meta: { kind: 'recall', batch: 'warmup', noCapture: true },
         render: async () => {
           if (!warmupSessionId) return null;
+          if (!this.recentInboundSession && this.lastHealth?.usage_mode !== 'local' && store?.range) {
+            try {
+              const curLatest = store.latestCursor?.() ?? 0;
+              if (curLatest > this.lastRecallTickCursor) {
+                const pending = store.range({ fromCursor: this.lastRecallTickCursor + 1, toCursor: curLatest }) ?? [];
+                for (const ev of pending) {
+                  const meta = (ev?.meta || {}) as Record<string, unknown>;
+                  if (ev?.source === 'pet-brain' || meta.mount === 'cortico-world-pet-brain') {
+                    this.host?.log?.info?.('预热召回跳过：当前批次已有入站预取记忆');
+                    return null;
+                  }
+                  const obs = this.observeInboundSession(ev);
+                  if (obs && obs !== warmupSessionId) {
+                    this.host?.log?.warn?.(
+                      `预热召回丢弃(跨会话)：期望会话 ${warmupSessionId}，当前批次 ${obs}`,
+                    );
+                    return null;
+                  }
+                }
+              }
+            } catch {
+              // ignore store check error
+            }
+          }
           if (this.recentInboundSession && this.recentInboundSession !== warmupSessionId) {
             this.host?.log?.warn?.(
               `预热召回丢弃(跨会话)：期望会话 ${warmupSessionId}，当前批次 ${this.recentInboundSession}`,
@@ -1147,7 +1227,7 @@ export class LivingMemoryWorld implements World {
     const maxAgeMs = 2 * 60 * 60 * 1000;
     const nowMs = Date.now();
     const userTexts = turns
-      .filter((turn) => turn.role === 'user')
+      .filter((turn) => turn.role === 'user' && (!turn.session_id || turn.session_id === sessionId))
       .filter((turn) => {
         const ts = Number(turn.timestamp) * 1000;
         if (!Number.isFinite(ts) || ts <= 0) return true;
@@ -1179,7 +1259,7 @@ export class LivingMemoryWorld implements World {
         source: this.id,
         origin: 'external',
         senderKey: 'livingmemory.recall',
-        meta: { kind: 'recall', batch: 'live' },
+        meta: { kind: 'recall', batch: 'live', noCapture: true },
         render: () => this.renderLiveRecall(topK, userTexts, sessionId, epoch),
       },
       { trigger: 'piggyback' },
@@ -1372,8 +1452,19 @@ export class LivingMemoryWorld implements World {
 
     const buckets = new Map<string, ChatTurn[]>();
     for (const e of events) {
+      const observed = this.observeInboundSession(e);
+      if (observed) {
+        this.lastCapturedInboundSession = observed;
+      }
       const turn = eventToTurn(e);
       if (!turn) continue;
+      if (
+        e.type === 'desktop-pet.self' &&
+        (this.lastCapturedInboundSession.includes('GroupMessage') ||
+          this.lastCapturedInboundSession === 'group:unknown')
+      ) {
+        continue;
+      }
       const content = turn.content.trim();
       if (!content || content.length < (this.cfg.captureMinLength || 2)) continue;
       const sessionId = this.resolveSession(turn.umo);
